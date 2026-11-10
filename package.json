@@ -1,0 +1,29 @@
+{
+  "name": "conversorg",
+  "version": "1.0.0",
+  "description": "Conversor de PDF profesional y multifuncional",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "keywords": [
+    "pdf",
+    "converter",
+    "word",
+    "excel",
+    "powerpoint",
+    "jpg"
+  ],
+  "author": "Estiven Garces <estivenabreo@gmail.com>",
+  "license": "MIT",
+  "dependencies": {
+    "docx": "^9.15.3",
+    "jszip": "^3.10.2",
+    "pdf-lib": "^1.17.1",
+    "pdf-parse": "^2.4.5",
+    "pdfjs-dist": "^3.11.174",
+    "pptxgenjs": "^4.0.1",
+    "qrcode": "^1.5.4",
+    "xlsx": "^0.18.5"
+  }
+}

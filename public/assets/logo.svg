@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#4F46E5" />
+      <stop offset="50%" stop-color="#7C3AED" />
+      <stop offset="100%" stop-color="#06B6D4" />
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="16" stdDeviation="20" flood-color="#000" flood-opacity="0.4" />
+    </filter>
+  </defs>
+  
+  <!-- Fondo redondeado suave -->
+  <rect width="512" height="512" rx="110" fill="#0A0E1A" />
+  
+  <!-- Tarjeta con gradiente -->
+  <rect x="76" y="76" width="360" height="360" rx="72" fill="url(#grad)" filter="url(#shadow)" />
+  
+  <!-- Símbolo de Documento estilizado -->
+  <path d="M190 160 H280 L340 220 V350 C340 361 331 370 320 370 H190 C179 370 170 361 170 350 V180 C170 169 179 160 190 160 Z" fill="#FFFFFF" fill-opacity="0.95" />
+  <path d="M280 160 V220 H340 Z" fill="#E2E8F0" />
+  
+  <!-- Letra G elegante de Garces / ConversorG -->
+  <text x="256" y="325" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif" font-size="96" font-weight="900" fill="#4F46E5" text-anchor="middle">G</text>
+  
+  <!-- Estrellas / Destellos de optimización -->
+  <circle cx="150" cy="140" r="10" fill="#38BDF8" />
+  <circle cx="370" cy="380" r="14" fill="#A78BFA" />
+</svg>
