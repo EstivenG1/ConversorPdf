@@ -81,7 +81,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // ==================== TEMA OSCURO / CLARO ====================
-  const savedTheme = localStorage.getItem('conversorg_theme') || 'dark';
+  const savedTheme = localStorage.getItem('conversorg_theme') || 'light';
   applyTheme(savedTheme);
 
   themeToggle.addEventListener('click', () => {
@@ -94,7 +94,7 @@ document.addEventListener('DOMContentLoaded', () => {
     document.documentElement.setAttribute('data-theme', theme);
     localStorage.setItem('conversorg_theme', theme);
     if (themeIcon) {
-      themeIcon.setAttribute('data-lucide', theme === 'dark' ? 'moon' : 'sun');
+      themeIcon.setAttribute('data-lucide', theme === 'dark' ? 'sun' : 'moon');
       if (window.lucide) lucide.createIcons();
     }
   }

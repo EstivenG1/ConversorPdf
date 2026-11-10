@@ -1,16 +1,1 @@
-[
-  {
-    "id": "item_1794336314854_za3k1t",
-    "timestamp": "2026-11-10T18:45:14.854Z",
-    "name": "prueba_documento.pdf",
-    "operation": "pdf-to-word",
-    "originalSize": 1024,
-    "resultSize": 2048,
-    "resultFileName": "prueba_ConversorG_123.docx",
-    "downloadUrl": "/api/download/prueba_ConversorG_123.docx",
-    "previewUrl": "/api/preview/prueba_ConversorG_123.docx",
-    "format": "docx",
-    "success": true,
-    "notes": ""
-  }
-]
+[]
