@@ -45,6 +45,27 @@ La app permite procesar archivos desde el móvil usando el poder de procesamient
 
 ---
 
+## 🌐 Publicación Gratuita en GitHub Pages (100% en el Navegador)
+
+¡ConversorG ahora está adaptado con motor **Client-Side**! Esto significa que las 14 conversiones se procesan directamente en la memoria del navegador del usuario (PC o celular) sin necesidad de un servidor Node.js activo, permitiéndote alojarlo **100% gratis en GitHub Pages**:
+
+### Pasos para Activar GitHub Pages en tu Repositorio:
+1. **Sube tus cambios a GitHub:**
+   ```bash
+   git push origin main
+   ```
+2. Entra a tu repositorio en GitHub: [https://github.com/EstivenG1/ConversorPdf](https://github.com/EstivenG1/ConversorPdf)
+3. Ve a la pestaña **Settings** (Configuración) arriba a la derecha.
+4. En el menú lateral izquierdo, haz clic en **Pages**.
+5. En la sección **Build and deployment**:
+   - **Source:** *Deploy from a branch*
+   - **Branch:** Selecciona **`main`** y la carpeta **`/(root)`**.
+   - Haz clic en **Save** (Guardar).
+6. En 1 o 2 minutos, GitHub te entregará el enlace público mundial de tu aplicación (por ejemplo: `https://estiveng1.github.io/ConversorPdf/`).
+7. ¡Cualquier persona desde cualquier PC o celular del mundo podrá entrar y convertir documentos al instante sin costo alguno!
+
+---
+
 ## 🎨 Paleta de Colores y Experiencia Visual
 
 Diseñada pensando en el confort visual, la calidez y el lujo sobrio:

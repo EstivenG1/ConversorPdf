@@ -1,6 +1,7 @@
 /**
- * CONVERSORG - FRONTEND CONTROLLER
- * Desarrollado por Estiven Garces (estivenabreo@gmail.com)
+ * CONVERSORG - FRONTEND CONTROLLER (COMPATIBLE CON GITHUB PAGES Y LOCAL)
+ * Desarrollador: Estiven Garces (estivenabreo@gmail.com)
+ * GitHub: https://github.com/EstivenG1
  */
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -14,7 +15,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const catButtons = document.querySelectorAll('.cat-btn');
   const themeToggle = document.getElementById('btnThemeToggle');
   const themeIcon = document.getElementById('themeIcon');
-  
+
   // Modal de Acción
   const actionModal = document.getElementById('actionModal');
   const modalTitle = document.getElementById('modalTitle');
@@ -58,6 +59,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const wifiModal = document.getElementById('wifiModal');
   const btnWifiModal = document.getElementById('btnWifiModal');
   const btnCloseWifi = document.getElementById('btnCloseWifi');
+  const wifiQrCodeContainer = document.getElementById('wifiQrCodeContainer') || document.querySelector('.qr-frame');
   const wifiQrCodeImg = document.getElementById('wifiQrCodeImg');
   const wifiUrlText = document.getElementById('wifiUrlText');
   const btnCopyWifiUrl = document.getElementById('btnCopyWifiUrl');
@@ -72,12 +74,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Estado Actual
   let currentTool = null;
-  let currentFiles = []; // Array de { file, base64, name, size, type }
-  let lastConversionResult = null;
+  let currentFiles = []; // Array de { file, buffer, name, size, type }
+  let lastResult = null; // { blob, blobUrl, fileName, originalSize, resultSize, text }
+  const activeBlobUrls = new Map();
 
   // Registrar Service Worker para PWA
   if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('/sw.js').catch(() => {});
+    navigator.serviceWorker.register('./sw.js').catch(() => {});
   }
 
   // ==================== TEMA OSCURO / CLARO ====================
@@ -117,7 +120,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
-  // ==================== ABRIR HERRAMIENTA DE CONVERSIÓN ====================
+  // ==================== ABRIR HERRAMIENTA ====================
   toolsGrid.addEventListener('click', e => {
     const card = e.target.closest('.tool-card');
     if (!card) return;
@@ -133,7 +136,7 @@ document.addEventListener('DOMContentLoaded', () => {
   function openActionModal({ tool, title, accept, multiple }) {
     currentTool = tool;
     currentFiles = [];
-    lastConversionResult = null;
+    lastResult = null;
 
     modalTitle.querySelector('span').textContent = title;
     fileInput.accept = accept;
@@ -142,10 +145,8 @@ document.addEventListener('DOMContentLoaded', () => {
       ? 'Puedes seleccionar uno o varios archivos simultáneamente' 
       : `Formatos permitidos: ${accept}`;
 
-    // Resetear vistas internas
     resetActionModalState();
 
-    // Mostrar/ocultar paneles de opciones según herramienta
     optionsBox.style.display = 'none';
     optSplitGroup.style.display = 'none';
     optWatermarkGroup.style.display = 'none';
@@ -173,6 +174,7 @@ document.addEventListener('DOMContentLoaded', () => {
   function resetActionModalState() {
     dropzoneArea.style.display = 'block';
     selectedFilesList.innerHTML = '';
+    selectedFilesList.style.display = 'flex';
     progressContainer.classList.remove('active');
     successScreen.classList.remove('active');
     modalFooter.style.display = 'flex';
@@ -189,7 +191,7 @@ document.addEventListener('DOMContentLoaded', () => {
   btnCloseModal.addEventListener('click', closeActionModal);
   btnCancelAction.addEventListener('click', closeActionModal);
 
-  // ==================== DRAG & DROP Y SELECCIÓN DE ARCHIVOS ====================
+  // ==================== DRAG & DROP ====================
   dropzoneArea.addEventListener('click', () => fileInput.click());
 
   ['dragenter', 'dragover'].forEach(eventName => {
@@ -207,8 +209,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   dropzoneArea.addEventListener('drop', e => {
-    const files = e.dataTransfer.files;
-    handleFilesSelected(files);
+    handleFilesSelected(e.dataTransfer.files);
   });
 
   fileInput.addEventListener('change', e => {
@@ -217,43 +218,27 @@ document.addEventListener('DOMContentLoaded', () => {
 
   async function handleFilesSelected(fileList) {
     if (!fileList || fileList.length === 0) return;
-
     const filesArr = Array.from(fileList);
 
     for (const f of filesArr) {
       if (!fileInput.multiple && currentFiles.length >= 1) {
         currentFiles = [];
       }
-      const b64 = await readFileAsBase64(f);
+      const buffer = await f.arrayBuffer();
       currentFiles.push({
         file: f,
         name: f.name,
         size: f.size,
         type: f.type,
-        base64: b64
+        buffer: buffer
       });
     }
 
     renderSelectedFiles();
   }
 
-  function readFileAsBase64(file) {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => {
-        const result = reader.result;
-        // Quitar metadata 'data:...;base64,'
-        const b64 = result.split(',')[1];
-        resolve(b64);
-      };
-      reader.onerror = err => reject(err);
-      reader.readAsDataURL(file);
-    });
-  }
-
   function renderSelectedFiles() {
     selectedFilesList.innerHTML = '';
-
     if (currentFiles.length === 0) {
       btnStartConvert.disabled = true;
       return;
@@ -266,7 +251,7 @@ document.addEventListener('DOMContentLoaded', () => {
       card.className = 'file-item-card';
       card.innerHTML = `
         <div class="file-item-info">
-          <i data-lucide="file" style="color: var(--primary-light);"></i>
+          <i data-lucide="file" style="color: var(--rolex-green);"></i>
           <div>
             <div class="file-item-name" title="${item.name}">${item.name}</div>
             <div class="file-item-size">${formatBytes(item.size)}</div>
@@ -281,9 +266,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (window.lucide) lucide.createIcons();
 
-    // Eventos para quitar
     selectedFilesList.querySelectorAll('.file-item-remove').forEach(btn => {
-      btn.addEventListener('click', e => {
+      btn.addEventListener('click', () => {
         const idx = parseInt(btn.getAttribute('data-index'), 10);
         currentFiles.splice(idx, 1);
         renderSelectedFiles();
@@ -291,11 +275,10 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // ==================== INICIAR CONVERSIÓN ====================
+  // ==================== EJECUTAR CONVERSIÓN EN NAVEGADOR ====================
   btnStartConvert.addEventListener('click', async () => {
     if (!currentTool || currentFiles.length === 0) return;
 
-    // Preparar opciones
     const options = {};
     if (currentTool === 'split-pdf') {
       options.pageRanges = document.getElementById('splitRangeInput').value.trim() || 'all';
@@ -309,46 +292,140 @@ document.addEventListener('DOMContentLoaded', () => {
       options.pageSize = document.getElementById('imgPageSizeSelect').value;
     }
 
-    // Ocultar dropzone y footer, activar barra de progreso
     dropzoneArea.style.display = 'none';
     selectedFilesList.style.display = 'none';
     optionsBox.style.display = 'none';
     modalFooter.style.display = 'none';
     progressContainer.classList.add('active');
 
-    // Animación de progreso
-    updateProgress(15, 'Analizando archivos...');
-    await delay(250);
-    updateProgress(45, 'Convirtiendo formato y procesando...');
+    updateProgress(20, 'Cargando documento en el navegador...');
+    await delay(180);
 
     try {
-      const response = await fetch('/api/convert', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          operation: currentTool,
-          files: currentFiles.map(f => ({ name: f.name, base64: f.base64, type: f.type })),
-          options
-        })
-      });
+      let resultBlob;
+      let outputFileName = '';
+      const firstFile = currentFiles[0];
+      const baseName = (firstFile.name || 'archivo').replace(/\.[^/.]+$/, '');
+      const originalTotalSize = currentFiles.reduce((acc, f) => acc + f.size, 0);
+      let textContent = '';
 
-      const data = await response.json();
+      updateProgress(45, 'Procesando conversión 100% en tu navegador...');
+      await delay(150);
 
-      if (!response.ok || !data.success) {
-        throw new Error(data.error || 'Fallo durante el procesamiento del archivo.');
+      switch (currentTool) {
+        case 'pdf-to-word': {
+          resultBlob = await ClientConverter.pdfToWord(firstFile.buffer, options);
+          outputFileName = `${baseName}_ConversorG.docx`;
+          break;
+        }
+        case 'word-to-pdf': {
+          resultBlob = await ClientConverter.wordToPdf(firstFile.buffer, options);
+          outputFileName = `${baseName}_ConversorG.pdf`;
+          break;
+        }
+        case 'merge-pdf': {
+          const buffers = currentFiles.map(f => f.buffer);
+          resultBlob = await ClientConverter.mergePdfs(buffers, options);
+          outputFileName = `unidos_ConversorG_${Date.now()}.pdf`;
+          break;
+        }
+        case 'split-pdf': {
+          const splitRes = await ClientConverter.splitPdf(firstFile.buffer, options);
+          resultBlob = splitRes.blob;
+          outputFileName = splitRes.filename;
+          break;
+        }
+        case 'pdf-to-excel': {
+          resultBlob = await ClientConverter.pdfToExcel(firstFile.buffer, options);
+          outputFileName = `${baseName}_ConversorG.xlsx`;
+          break;
+        }
+        case 'excel-to-pdf': {
+          resultBlob = await ClientConverter.excelToPdf(firstFile.buffer, options);
+          outputFileName = `${baseName}_ConversorG.pdf`;
+          break;
+        }
+        case 'pdf-to-pptx': {
+          resultBlob = await ClientConverter.pdfToPptx(firstFile.buffer, options);
+          outputFileName = `${baseName}_ConversorG.pptx`;
+          break;
+        }
+        case 'pptx-to-pdf': {
+          resultBlob = await ClientConverter.pptxToPdf(firstFile.buffer, options);
+          outputFileName = `${baseName}_ConversorG.pdf`;
+          break;
+        }
+        case 'images-to-pdf': {
+          resultBlob = await ClientConverter.imagesToPdf(currentFiles, options);
+          outputFileName = `fotos_ConversorG_${Date.now()}.pdf`;
+          break;
+        }
+        case 'pdf-to-jpg': {
+          const jpgRes = await ClientConverter.pdfToJpg(firstFile.buffer, options);
+          resultBlob = jpgRes.blob;
+          outputFileName = jpgRes.filename;
+          break;
+        }
+        case 'watermark-pdf': {
+          resultBlob = await ClientConverter.watermarkPdf(firstFile.buffer, options.watermarkText, options);
+          outputFileName = `${baseName}_marca_ConversorG.pdf`;
+          break;
+        }
+        case 'rotate-pdf': {
+          resultBlob = await ClientConverter.rotatePdf(firstFile.buffer, options.degrees);
+          outputFileName = `${baseName}_rotado_ConversorG.pdf`;
+          break;
+        }
+        case 'compress-pdf': {
+          resultBlob = await ClientConverter.compressPdf(firstFile.buffer, options);
+          outputFileName = `${baseName}_optimizado_ConversorG.pdf`;
+          break;
+        }
+        case 'extract-text': {
+          const resTxt = await ClientConverter.extractText(firstFile.buffer);
+          resultBlob = resTxt.blob;
+          textContent = resTxt.text;
+          outputFileName = `${baseName}_texto_ConversorG.txt`;
+          break;
+        }
+        default:
+          throw new Error('Operación no soportada.');
       }
 
-      updateProgress(100, '¡Conversión finalizada!');
-      await delay(350);
+      updateProgress(100, '¡Conversión completada con éxito!');
+      await delay(250);
 
-      lastConversionResult = data;
-      showSuccessScreen(data);
-      showToast('Archivo convertido con éxito', 'success');
+      const blobUrl = URL.createObjectURL(resultBlob);
+      const resultSize = resultBlob.size;
+      const savings = originalTotalSize > resultSize ? Math.round((1 - resultSize / originalTotalSize) * 100) : 0;
+
+      lastResult = {
+        blob: resultBlob,
+        blobUrl: blobUrl,
+        fileName: outputFileName,
+        originalSize: originalTotalSize,
+        resultSize: resultSize,
+        savings: savings,
+        text: textContent
+      };
+
+      // Guardar en historial local
+      addHistoryRecord({
+        name: firstFile.name,
+        operation: currentTool,
+        originalSize: originalTotalSize,
+        resultSize: resultSize,
+        fileName: outputFileName,
+        blobUrl: blobUrl,
+        blob: resultBlob
+      });
+
+      showSuccessScreen(lastResult);
+      showToast('Documento procesado con éxito', 'success');
 
     } catch (err) {
       console.error(err);
-      showToast(err.message || 'Error al procesar el archivo', 'error');
-      // Restaurar interfaz
+      showToast(err.message || 'Error durante la conversión', 'error');
       progressContainer.classList.remove('active');
       dropzoneArea.style.display = 'block';
       selectedFilesList.style.display = 'flex';
@@ -362,24 +439,23 @@ document.addEventListener('DOMContentLoaded', () => {
     if (text) progressStatusText.textContent = text;
   }
 
-  function showSuccessScreen(data) {
+  function showSuccessScreen(result) {
     progressContainer.classList.remove('active');
     successScreen.classList.add('active');
 
-    successFileName.textContent = data.fileName;
-    statOriginalSize.textContent = `Original: ${formatBytes(data.originalSize)}`;
-    statResultSize.textContent = `Resultado: ${formatBytes(data.resultSize)} ${data.savings > 0 ? '(-' + data.savings + '%)' : ''}`;
+    successFileName.textContent = result.fileName;
+    statOriginalSize.textContent = `Original: ${formatBytes(result.originalSize)}`;
+    statResultSize.textContent = `Resultado: ${formatBytes(result.resultSize)} ${result.savings > 0 ? '(-' + result.savings + '%)' : ''}`;
 
-    btnDownloadResult.href = data.downloadUrl;
-    btnDownloadResult.setAttribute('download', data.fileName);
+    btnDownloadResult.href = result.blobUrl;
+    btnDownloadResult.setAttribute('download', result.fileName);
 
     if (window.lucide) lucide.createIcons();
   }
 
-  // Previsualizar desde resultado exitoso
   btnPreviewResult.addEventListener('click', () => {
-    if (lastConversionResult && lastConversionResult.previewUrl) {
-      openFilePreview(lastConversionResult.fileName, lastConversionResult.previewUrl);
+    if (lastResult) {
+      openFilePreview(lastResult.fileName, lastResult.blobUrl, lastResult.text);
     }
   });
 
@@ -389,9 +465,9 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // ==================== VISUALIZADOR DE ARCHIVOS ====================
-  function openFilePreview(fileName, previewUrl) {
+  function openFilePreview(fileName, blobUrl, rawText = '') {
     previewTitle.querySelector('span').textContent = fileName;
-    previewDownloadDirect.href = previewUrl;
+    previewDownloadDirect.href = blobUrl;
     previewDownloadDirect.setAttribute('download', fileName);
 
     previewIframe.style.display = 'none';
@@ -401,21 +477,24 @@ document.addEventListener('DOMContentLoaded', () => {
     const ext = fileName.split('.').pop().toLowerCase();
 
     if (ext === 'pdf') {
-      previewIframe.src = previewUrl;
+      previewIframe.src = blobUrl;
       previewIframe.style.display = 'block';
     } else if (['jpg', 'jpeg', 'png', 'webp', 'svg'].includes(ext)) {
-      previewImg.src = previewUrl;
+      previewImg.src = blobUrl;
       previewImg.style.display = 'block';
     } else if (['txt', 'csv', 'json', 'xml'].includes(ext)) {
-      fetch(previewUrl)
-        .then(r => r.text())
-        .then(t => {
+      if (rawText) {
+        previewTextBox.textContent = rawText;
+        previewTextBox.style.display = 'block';
+      } else {
+        fetch(blobUrl).then(r => r.text()).then(t => {
           previewTextBox.textContent = t;
           previewTextBox.style.display = 'block';
         });
+      }
     } else {
-      // Para docx, xlsx, pptx o zip, el iframe intenta mostrar o se ofrece descarga
-      previewIframe.src = previewUrl;
+      // Para DOCX / XLSX / PPTX, se muestra visor o descarga directa
+      previewIframe.src = blobUrl;
       previewIframe.style.display = 'block';
     }
 
@@ -428,19 +507,39 @@ document.addEventListener('DOMContentLoaded', () => {
     previewIframe.src = '';
   });
 
-  // ==================== CONEXIÓN CELULAR / ANDROID WIFI ====================
+  // ==================== CELULAR / WIFI & GITHUB PAGES ====================
   btnWifiModal.addEventListener('click', async () => {
-    try {
-      const res = await fetch('/api/network-info');
-      const data = await res.json();
+    const isOnlineGitHubPages = window.location.hostname.includes('github.io');
+    const targetUrl = isOnlineGitHubPages ? window.location.href : (window.location.origin || 'http://localhost:3000');
 
-      wifiQrCodeImg.src = data.qrCode;
-      wifiUrlText.textContent = data.networkUrl;
-      wifiModal.classList.add('active');
-      if (window.lucide) lucide.createIcons();
-    } catch (err) {
-      showToast('No se pudo obtener información de la red WiFi', 'error');
+    // Intentar consultar al servidor local si estamos en localhost
+    let qrUrl = targetUrl;
+    if (!isOnlineGitHubPages) {
+      try {
+        const res = await fetch('/api/network-info');
+        if (res.ok) {
+          const data = await res.json();
+          qrUrl = data.networkUrl;
+        }
+      } catch (_) {}
     }
+
+    wifiUrlText.textContent = qrUrl;
+
+    // Renderizar QR Code dinámico
+    const qrTarget = document.querySelector('.qr-frame');
+    qrTarget.innerHTML = '';
+    new QRCode(qrTarget, {
+      text: qrUrl,
+      width: 220,
+      height: 220,
+      colorDark: '#004D2E',
+      colorLight: '#FFFFFF',
+      correctLevel: QRCode.CorrectLevel.M
+    });
+
+    wifiModal.classList.add('active');
+    if (window.lucide) lucide.createIcons();
   });
 
   btnCloseWifi.addEventListener('click', () => {
@@ -449,33 +548,54 @@ document.addEventListener('DOMContentLoaded', () => {
 
   btnCopyWifiUrl.addEventListener('click', () => {
     const text = wifiUrlText.textContent;
-    if (text && text.startsWith('http')) {
+    if (text) {
       navigator.clipboard.writeText(text).then(() => {
-        showToast('Enlace WiFi copiado al portapapeles', 'info');
+        showToast('Enlace copiado al portapapeles', 'info');
       });
     }
   });
 
-  // ==================== HISTORIAL DE ACTIVIDAD ====================
+  // ==================== HISTORIAL DE ACTIVIDAD (LOCALSTORAGE) ====================
   btnHistoryModal.addEventListener('click', loadAndShowHistory);
   btnCloseHistory.addEventListener('click', () => historyModal.classList.remove('active'));
 
-  async function loadAndShowHistory() {
+  function getLocalHistory() {
     try {
-      const res = await fetch('/api/history');
-      const list = await res.json();
-      renderHistoryTable(list);
-      historyModal.classList.add('active');
-      if (window.lucide) lucide.createIcons();
-    } catch (err) {
-      showToast('Error al cargar historial', 'error');
+      const raw = localStorage.getItem('conversorg_history');
+      return raw ? JSON.parse(raw) : [];
+    } catch (_) {
+      return [];
     }
   }
 
-  function renderHistoryTable(list) {
+  function addHistoryRecord(record) {
+    const list = getLocalHistory();
+    const id = 'hist_' + Date.now();
+    const item = {
+      id: id,
+      timestamp: new Date().toISOString(),
+      name: record.name || 'Archivo',
+      operation: record.operation,
+      originalSize: record.originalSize,
+      resultSize: record.resultSize,
+      fileName: record.fileName
+    };
+    list.unshift(item);
+    if (list.length > 50) list.pop();
+    localStorage.setItem('conversorg_history', JSON.stringify(list));
+
+    if (record.blobUrl) {
+      activeBlobUrls.set(id, { url: record.blobUrl, name: record.fileName, blob: record.blob });
+    }
+  }
+
+  function loadAndShowHistory() {
+    const list = getLocalHistory();
     historyTableBody.innerHTML = '';
+
     if (!list || list.length === 0) {
       historyEmptyMessage.style.display = 'block';
+      historyModal.classList.add('active');
       return;
     }
     historyEmptyMessage.style.display = 'none';
@@ -483,23 +603,25 @@ document.addEventListener('DOMContentLoaded', () => {
     list.forEach(item => {
       const tr = document.createElement('tr');
       const dt = new Date(item.timestamp).toLocaleString();
+      const activeObj = activeBlobUrls.get(item.id);
+
       tr.innerHTML = `
         <td style="color: var(--text-muted); font-size: 0.8rem;">${dt}</td>
         <td><strong>${item.name}</strong></td>
         <td><span class="stat-pill">${item.operation}</span></td>
         <td>${formatBytes(item.resultSize || 0)}</td>
         <td style="text-align: right; white-space: nowrap;">
-          ${item.previewUrl ? `
-            <button class="btn btn-icon btn-hist-preview" data-name="${item.resultFileName}" data-url="${item.previewUrl}" title="Previsualizar" style="width: 32px; height: 32px;">
+          ${activeObj ? `
+            <button class="btn btn-icon btn-hist-preview" data-id="${item.id}" title="Previsualizar" style="width: 32px; height: 32px;">
               <i data-lucide="eye" style="width: 16px; height: 16px;"></i>
             </button>
-          ` : ''}
-          ${item.downloadUrl ? `
-            <a href="${item.downloadUrl}" class="btn btn-icon" download="${item.resultFileName}" title="Descargar" style="width: 32px; height: 32px; display: inline-flex;">
+            <a href="${activeObj.url}" class="btn btn-icon" download="${item.fileName}" title="Descargar" style="width: 32px; height: 32px; display: inline-flex;">
               <i data-lucide="download" style="width: 16px; height: 16px;"></i>
             </a>
-          ` : ''}
-          <button class="btn btn-icon btn-hist-delete" data-id="${item.id}" title="Eliminar" style="width: 32px; height: 32px; color: #EF4444;">
+          ` : `
+            <span style="font-size: 0.72rem; color: var(--text-muted);">Completado</span>
+          `}
+          <button class="btn btn-icon btn-hist-delete" data-id="${item.id}" title="Eliminar registro" style="width: 32px; height: 32px; color: #DC2626;">
             <i data-lucide="trash-2" style="width: 16px; height: 16px;"></i>
           </button>
         </td>
@@ -509,31 +631,37 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (window.lucide) lucide.createIcons();
 
-    // Eventos dentro de historial
     historyTableBody.querySelectorAll('.btn-hist-preview').forEach(btn => {
       btn.addEventListener('click', () => {
-        openFilePreview(btn.getAttribute('data-name'), btn.getAttribute('data-url'));
+        const id = btn.getAttribute('data-id');
+        const obj = activeBlobUrls.get(id);
+        if (obj) openFilePreview(obj.name, obj.url);
       });
     });
 
     historyTableBody.querySelectorAll('.btn-hist-delete').forEach(btn => {
-      btn.addEventListener('click', async () => {
+      btn.addEventListener('click', () => {
         const id = btn.getAttribute('data-id');
-        await fetch(`/api/history/${id}`, { method: 'DELETE' });
+        let current = getLocalHistory();
+        current = current.filter(x => x.id !== id);
+        localStorage.setItem('conversorg_history', JSON.stringify(current));
+        activeBlobUrls.delete(id);
         loadAndShowHistory();
       });
     });
+
+    historyModal.classList.add('active');
   }
 
-  btnClearHistory.addEventListener('click', async () => {
+  btnClearHistory.addEventListener('click', () => {
     if (confirm('¿Deseas vaciar todo el historial de conversiones?')) {
-      await fetch('/api/history', { method: 'DELETE' });
+      localStorage.removeItem('conversorg_history');
+      activeBlobUrls.clear();
       loadAndShowHistory();
       showToast('Historial vaciado', 'info');
     }
   });
 
-  // Cerrar modales al hacer clic fuera
   [actionModal, previewModal, wifiModal, historyModal].forEach(modal => {
     modal.addEventListener('click', e => {
       if (e.target === modal) modal.classList.remove('active');

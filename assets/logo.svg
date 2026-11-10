@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="gradRolex" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#004D2E" />
+      <stop offset="50%" stop-color="#006039" />
+      <stop offset="100%" stop-color="#0A7E4D" />
+    </linearGradient>
+    <linearGradient id="gradGold" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#F3D389" />
+      <stop offset="50%" stop-color="#DFBA73" />
+      <stop offset="100%" stop-color="#C5A059" />
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="16" stdDeviation="20" flood-color="#000" flood-opacity="0.35" />
+    </filter>
+  </defs>
+  
+  <!-- Fondo redondeado suave tono verde nocturno -->
+  <rect width="512" height="512" rx="110" fill="#0A140F" />
+  
+  <!-- Tarjeta con gradiente Verde Rolex y borde dorado -->
+  <rect x="76" y="76" width="360" height="360" rx="72" fill="url(#gradRolex)" stroke="url(#gradGold)" stroke-width="4" filter="url(#shadow)" />
+  
+  <!-- Símbolo de Documento en Tono Hueso / Ivory cálido -->
+  <path d="M190 160 H280 L340 220 V350 C340 361 331 370 320 370 H190 C179 370 170 361 170 350 V180 C170 169 179 160 190 160 Z" fill="#F7F4EB" fill-opacity="0.96" />
+  <path d="M280 160 V220 H340 Z" fill="#EAE2D1" />
+  
+  <!-- Letra G elegante de Garces / ConversorG en Verde Rolex -->
+  <text x="256" y="325" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="96" font-weight="900" fill="#006039" text-anchor="middle">G</text>
+  
+  <!-- Destellos de elegancia en Oro Champán -->
+  <circle cx="150" cy="140" r="10" fill="#DFBA73" />
+  <circle cx="370" cy="380" r="14" fill="#F3D389" />
+</svg>

@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>ConversorG - Conversor de PDF Profesional</title>
+  <meta name="description" content="Conversor de PDF profesional, rápido, elegante y 100% local. Creado por Estiven Garces.">
+  <meta name="theme-color" content="#006039">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="icon" type="image/svg+xml" href="./assets/logo.svg">
+  <link rel="manifest" href="./manifest.json">
+  <link rel="stylesheet" href="./css/style.css">
+</head>
+<body>
+
+  <!-- Marca de agua decorativa de fondo -->
+  <div class="watermark-bg">ConversorG</div>
+  <div class="glow-orb glow-orb-1"></div>
+  <div class="glow-orb glow-orb-2"></div>
+
+  <!-- Encabezado Principal -->
+  <header class="app-header">
+    <div class="app-container header-content">
+      <a href="/" class="brand-wrapper">
+        <div class="brand-logo">G</div>
+        <div class="brand-info">
+          <h1>ConversorG <span class="brand-badge">PRO v1.0</span></h1>
+          <div class="brand-author">Por Estiven Garces • estivenabreo@gmail.com</div>
+        </div>
+      </a>
+
+      <div class="header-actions">
+        <!-- Botón Conectar WiFi / Android -->
+        <button id="btnWifiModal" class="btn btn-wifi" title="Conectar celular por WiFi">
+          <i data-lucide="smartphone"></i>
+          <span class="btn-text-responsive">Celular WiFi</span>
+        </button>
+
+        <!-- Botón Historial -->
+        <button id="btnHistoryModal" class="btn btn-surface" title="Ver historial de actividad">
+          <i data-lucide="history"></i>
+          <span class="btn-text-responsive">Historial</span>
+        </button>
+
+        <!-- Alternar Tema Oscuro / Claro -->
+        <button id="btnThemeToggle" class="btn btn-icon" title="Cambiar tema">
+          <i data-lucide="moon" id="themeIcon"></i>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Contenido Central -->
+  <main class="app-container">
+    <!-- Hero Banner -->
+    <section class="hero">
+      <div class="hero-tag">
+        <i data-lucide="sparkles"></i> 100% Rápido, Local y Seguro en tu Red WiFi
+      </div>
+      <h2>Conversor y Gestor Integral de Documentos</h2>
+      <p>Transforma, une, divide, protege y optimiza tus archivos PDF, Word, Excel, PowerPoint e Imágenes sin límites y con máxima calidad visual.</p>
+
+      <!-- Filtros por Categoría -->
+      <div class="categories-bar">
+        <button class="cat-btn active" data-category="all">
+          <i data-lucide="layout-grid"></i> Todos
+        </button>
+        <button class="cat-btn" data-category="pdf-to-office">
+          <i data-lucide="file-output"></i> PDF a Office
+        </button>
+        <button class="cat-btn" data-category="office-to-pdf">
+          <i data-lucide="file-input"></i> Office a PDF
+        </button>
+        <button class="cat-btn" data-category="images">
+          <i data-lucide="image"></i> Imágenes
+        </button>
+        <button class="cat-btn" data-category="tools">
+          <i data-lucide="wrench"></i> Herramientas PDF
+        </button>
+      </div>
+    </section>
+
+    <!-- Grid de Herramientas -->
+    <section class="tools-grid" id="toolsGrid">
+      
+      <!-- 1. PDF a Word -->
+      <div class="tool-card" data-category="pdf-to-office" data-tool="pdf-to-word" data-accept=".pdf" data-title="PDF a Word" data-desc="Convierte documentos PDF a archivos DOCX editables con formato y párrafos estructurados.">
+        <div class="tool-badge">DOCX</div>
+        <div class="tool-icon-wrapper icon-word">
+          <i data-lucide="file-text"></i>
+        </div>
+        <h3 class="tool-title">PDF a Word</h3>
+        <p class="tool-desc">Convierte tus PDF a documentos Word editables conservando texto, títulos y estructura.</p>
+        <div class="tool-footer">
+          <span>Convertir ahora</span>
+          <i data-lucide="arrow-right" class="tool-arrow"></i>
+        </div>
+      </div>
+
+      <!-- 2. Word a PDF -->
+      <div class="tool-card" data-category="office-to-pdf" data-tool="word-to-pdf" data-accept=".docx" data-title="Word a PDF" data-desc="Convierte tus documentos DOCX en documentos PDF nítidos y profesionales.">
+        <div class="tool-badge">PDF</div>
+        <div class="tool-icon-wrapper icon-word">
+          <i data-lucide="file-check"></i>
+        </div>
+        <h3 class="tool-title">Word a PDF</h3>
+        <p class="tool-desc">Convierte archivos Word (.docx) a PDF estándar de alta fidelidad visual.</p>
+        <div class="tool-footer">
+          <span>Convertir ahora</span>
+          <i data-lucide="arrow-right" class="tool-arrow"></i>
+        </div>
+      </div>
+
+      <!-- 3. Unir PDF -->
+      <div class="tool-card" data-category="tools" data-tool="merge-pdf" data-accept=".pdf" data-multiple="true" data-title="Unir PDF" data-desc="Combina dos o más archivos PDF en un único archivo organizado.">
+        <div class="tool-badge">Múltiple</div>
+        <div class="tool-icon-wrapper icon-tools">
+          <i data-lucide="files"></i>
+        </div>
+        <h3 class="tool-title">Unir PDF</h3>
+        <p class="tool-desc">Combina múltiples PDFs en un solo documento consolidado en el orden que tú elijas.</p>
+        <div class="tool-footer">
+          <span>Unir archivos</span>
+          <i data-lucide="arrow-right" class="tool-arrow"></i>
+        </div>
+      </div>
+
+      <!-- 4. Dividir PDF -->
+      <div class="tool-card" data-category="tools" data-tool="split-pdf" data-accept=".pdf" data-title="Dividir PDF" data-desc="Extrae rangos de páginas específicas o divide todas las páginas en un archivo ZIP.">
+        <div class="tool-badge">Páginas</div>
+        <div class="tool-icon-wrapper icon-tools">
+          <i data-lucide="scissors"></i>
+        </div>
+        <h3 class="tool-title">Dividir PDF</h3>
+        <p class="tool-desc">Separa páginas de tu PDF por rangos (ej: 1-3, 5) o exporta cada página por separado.</p>
+        <div class="tool-footer">
+          <span>Dividir archivo</span>
+          <i data-lucide="arrow-right" class="tool-arrow"></i>
+        </div>
+      </div>
+
+      <!-- 5. PDF a Excel -->
+      <div class="tool-card" data-category="pdf-to-office" data-tool="pdf-to-excel" data-accept=".pdf" data-title="PDF a Excel" data-desc="Extrae tablas y columnas de datos desde PDFs a hojas de cálculo XLSX.">
+        <div class="tool-badge">XLSX</div>
+        <div class="tool-icon-wrapper icon-excel">
+          <i data-lucide="sheet"></i>
+        </div>
+        <h3 class="tool-title">PDF a Excel</h3>
+        <p class="tool-desc">Extrae información y tablas numéricas directo a hojas de cálculo Microsoft Excel.</p>
+        <div class="tool-footer">
+          <span>Convertir ahora</span>
+          <i data-lucide="arrow-right" class="tool-arrow"></i>
+        </div>
+      </div>
+
+      <!-- 6. Excel a PDF -->
+      <div class="tool-card" data-category="office-to-pdf" data-tool="excel-to-pdf" data-accept=".xlsx,.xls,.csv" data-title="Excel a PDF" data-desc="Convierte libros y tablas de Excel (.xlsx, .xls, .csv) en tablas PDF formateadas.">
+        <div class="tool-badge">PDF</div>
+        <div class="tool-icon-wrapper icon-excel">
+          <i data-lucide="table"></i>
+        </div>
+        <h3 class="tool-title">Excel a PDF</h3>
+        <p class="tool-desc">Transforma tus hojas de cálculo en documentos PDF con diseño tabular limpio y estilizado.</p>
+        <div class="tool-footer">
+          <span>Convertir ahora</span>
+          <i data-lucide="arrow-right" class="tool-arrow"></i>
+        </div>
+      </div>
+
+      <!-- 7. PDF a PowerPoint -->
+      <div class="tool-card" data-category="pdf-to-office" data-tool="pdf-to-pptx" data-accept=".pdf" data-title="PDF a PowerPoint" data-desc="Convierte cada página del PDF en diapositivas de presentación PPTX.">
+        <div class="tool-badge">PPTX</div>
+        <div class="tool-icon-wrapper icon-ppt">
+          <i data-lucide="presentation"></i>
+        </div>
+        <h3 class="tool-title">PDF a PowerPoint</h3>
+        <p class="tool-desc">Genera una presentación PPTX en formato panorámico 16:9 a partir de tu PDF.</p>
+        <div class="tool-footer">
+          <span>Convertir ahora</span>
+          <i data-lucide="arrow-right" class="tool-arrow"></i>
+        </div>
+      </div>
+
+      <!-- 8. PowerPoint a PDF -->
+      <div class="tool-card" data-category="office-to-pdf" data-tool="pptx-to-pdf" data-accept=".pptx" data-title="PowerPoint a PDF" data-desc="Convierte presentaciones de PowerPoint a diapositivas PDF listas para compartir.">
+        <div class="tool-badge">PDF</div>
+        <div class="tool-icon-wrapper icon-ppt">
+          <i data-lucide="monitor-play"></i>
+        </div>
+        <h3 class="tool-title">PowerPoint a PDF</h3>
+        <p class="tool-desc">Convierte tus diapositivas PPTX a documento PDF preservando textos y presentación.</p>
+        <div class="tool-footer">
+          <span>Convertir ahora</span>
+          <i data-lucide="arrow-right" class="tool-arrow"></i>
+        </div>
+      </div>
+
+      <!-- 9. JPG / Imágenes a PDF -->
+      <div class="tool-card" data-category="images" data-tool="images-to-pdf" data-accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" data-multiple="true" data-title="JPG a PDF" data-desc="Convierte una o varias fotos JPG, PNG o WebP en un único archivo PDF.">
+        <div class="tool-badge">Fotos</div>
+        <div class="tool-icon-wrapper icon-jpg">
+          <i data-lucide="image-plus"></i>
+        </div>
+        <h3 class="tool-title">JPG / Fotos a PDF</h3>
+        <p class="tool-desc">Convierte fotos e imágenes (JPG, PNG) a documento PDF con márgenes configurables.</p>
+        <div class="tool-footer">
+          <span>Convertir imágenes</span>
+          <i data-lucide="arrow-right" class="tool-arrow"></i>
+        </div>
+      </div>
+
+      <!-- 10. PDF a JPG -->
+      <div class="tool-card" data-category="images" data-tool="pdf-to-jpg" data-accept=".pdf" data-title="PDF a JPG" data-desc="Extrae o exporta las páginas de tu PDF como imágenes JPG en un archivo ZIP.">
+        <div class="tool-badge">ZIP/JPG</div>
+        <div class="tool-icon-wrapper icon-jpg">
+          <i data-lucide="images"></i>
+        </div>
+        <h3 class="tool-title">PDF a JPG</h3>
+        <p class="tool-desc">Exporta las páginas de tu documento PDF en imágenes de alta resolución listas para descargar.</p>
+        <div class="tool-footer">
+          <span>Extraer imágenes</span>
+          <i data-lucide="arrow-right" class="tool-arrow"></i>
+        </div>
+      </div>
+
+      <!-- 11. Comprimir PDF -->
+      <div class="tool-card" data-category="tools" data-tool="compress-pdf" data-accept=".pdf" data-title="Comprimir PDF" data-desc="Optimiza y reduce el peso en megabytes de tus documentos PDF.">
+        <div class="tool-badge">Optimizar</div>
+        <div class="tool-icon-wrapper icon-tools">
+          <i data-lucide="minimize-2"></i>
+        </div>
+        <h3 class="tool-title">Comprimir PDF</h3>
+        <p class="tool-desc">Reduce el tamaño de tu archivo PDF para enviarlo fácilmente por correo o WhatsApp.</p>
+        <div class="tool-footer">
+          <span>Comprimir ahora</span>
+          <i data-lucide="arrow-right" class="tool-arrow"></i>
+        </div>
+      </div>
+
+      <!-- 12. Rotar PDF -->
+      <div class="tool-card" data-category="tools" data-tool="rotate-pdf" data-accept=".pdf" data-title="Rotar PDF" data-desc="Gira tus páginas a 90°, 180° o 270° si quedaron de cabeza o de lado.">
+        <div class="tool-badge">Rotación</div>
+        <div class="tool-icon-wrapper icon-tools">
+          <i data-lucide="rotate-cw"></i>
+        </div>
+        <h3 class="tool-title">Rotar PDF</h3>
+        <p class="tool-desc">Corrige la orientación de tus documentos girando páginas con precisión.</p>
+        <div class="tool-footer">
+          <span>Rotar páginas</span>
+          <i data-lucide="arrow-right" class="tool-arrow"></i>
+        </div>
+      </div>
+
+      <!-- 13. Marca de Agua ConversorG -->
+      <div class="tool-card" data-category="tools" data-tool="watermark-pdf" data-accept=".pdf" data-title="Marca de Agua" data-desc="Estampa tu marca de agua ConversorG o texto personalizado en cada página.">
+        <div class="tool-badge">Branding</div>
+        <div class="tool-icon-wrapper icon-tools">
+          <i data-lucide="stamp"></i>
+        </div>
+        <h3 class="tool-title">Marca de Agua</h3>
+        <p class="tool-desc">Protege tus documentos con la marca 'ConversorG' o un sello diagonal personalizado.</p>
+        <div class="tool-footer">
+          <span>Aplicar marca</span>
+          <i data-lucide="arrow-right" class="tool-arrow"></i>
+        </div>
+      </div>
+
+      <!-- 14. Extraer Texto -->
+      <div class="tool-card" data-category="tools" data-tool="extract-text" data-accept=".pdf" data-title="Extraer Texto" data-desc="Extrae todo el texto plano de tu PDF para copiarlo o guardarlo en .TXT.">
+        <div class="tool-badge">Texto</div>
+        <div class="tool-icon-wrapper icon-tools">
+          <i data-lucide="file-search"></i>
+        </div>
+        <h3 class="tool-title">Extraer Texto</h3>
+        <p class="tool-desc">Extrae todo el contenido escrito del documento PDF a formato de texto limpio.</p>
+        <div class="tool-footer">
+          <span>Extraer texto</span>
+          <i data-lucide="arrow-right" class="tool-arrow"></i>
+        </div>
+      </div>
+
+    </section>
+  </main>
+
+  <!-- Pie de Página -->
+  <footer class="app-footer">
+    <div class="app-container footer-content">
+      <div class="footer-top">
+        <div class="footer-author">
+          <span class="badge-conversorg">ConversorG PRO</span>
+          <span>Desarrollado con dedicación por <strong>Estiven Garces</strong></span>
+          <span>(Email: <a href="mailto:estivenabreo@gmail.com" style="color: var(--rolex-green); font-weight: 600;">estivenabreo@gmail.com</a>)</span>
+        </div>
+        <div>
+          <span>Procesamiento 100% Local • Red WiFi • PC Windows y Celular Android</span>
+        </div>
+      </div>
+
+      <!-- Apartado de Créditos y Perfil de GitHub -->
+      <div class="footer-github-box">
+        <div style="font-size: 0.85rem; color: var(--text-secondary);">
+          <span>Código fuente, proyectos y soporte oficial en GitHub de <strong>Estiven Garces</strong>:</span>
+        </div>
+        <div>
+          <a href="https://github.com/EstivenG1" target="_blank" rel="noopener noreferrer" class="github-link-btn" title="Ver perfil de GitHub de Estiven Garces">
+            <svg height="18" width="18" viewBox="0 0 16 16" fill="currentColor" style="vertical-align: middle;">
+              <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"></path>
+            </svg>
+            <span>GitHub: https://github.com/EstivenG1</span>
+          </a>
+        </div>
+      </div>
+    </div>
+  </footer>
+
+  <!-- ==================== MODAL DE ACCIÓN / DROPZONE ==================== -->
+  <div class="modal-backdrop" id="actionModal">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3 id="modalTitle">
+          <i data-lucide="file-cog"></i> <span>Conversión de Archivo</span>
+        </h3>
+        <button class="btn-icon modal-close-btn" id="btnCloseModal">
+          <i data-lucide="x"></i>
+        </button>
+      </div>
+
+      <div class="modal-body">
+        <!-- Dropzone para arrastrar archivos -->
+        <div class="dropzone" id="dropzoneArea">
+          <input type="file" id="fileInput" class="file-input-hidden">
+          <div class="dropzone-icon">
+            <i data-lucide="upload-cloud"></i>
+          </div>
+          <h4>Arrastra tus archivos aquí</h4>
+          <p id="dropzoneHelpText">o haz clic para explorar en tu dispositivo</p>
+        </div>
+
+        <!-- Archivos cargados -->
+        <div class="selected-files-list" id="selectedFilesList"></div>
+
+        <!-- Panel de Opciones dinámicas -->
+        <div class="options-box" id="optionsBox" style="display: none;">
+          <!-- Opción: Dividir páginas -->
+          <div class="option-group" id="optSplitGroup" style="display: none;">
+            <label for="splitRangeInput">Páginas a extraer (ej: 1-3, 5, 8 o 'all' para ZIP):</label>
+            <input type="text" id="splitRangeInput" class="form-input" placeholder="all">
+          </div>
+
+          <!-- Opción: Marca de agua -->
+          <div class="option-group" id="optWatermarkGroup" style="display: none;">
+            <label for="watermarkTextInput">Texto de la marca de agua:</label>
+            <input type="text" id="watermarkTextInput" class="form-input" value="ConversorG">
+            <div style="display: flex; gap: 10px; margin-top: 8px;">
+              <div style="flex: 1;">
+                <label for="watermarkOpacityInput" style="font-size: 0.75rem;">Opacidad:</label>
+                <select id="watermarkOpacityInput" class="form-select">
+                  <option value="0.15">Muy suave (15%)</option>
+                  <option value="0.25" selected>Media (25%)</option>
+                  <option value="0.45">Intensa (45%)</option>
+                </select>
+              </div>
+              <div style="flex: 1;">
+                <label for="watermarkAngleInput" style="font-size: 0.75rem;">Ángulo:</label>
+                <select id="watermarkAngleInput" class="form-select">
+                  <option value="45" selected>Diagonal (45°)</option>
+                  <option value="0">Horizontal (0°)</option>
+                  <option value="90">Vertical (90°)</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <!-- Opción: Rotar páginas -->
+          <div class="option-group" id="optRotateGroup" style="display: none;">
+            <label for="rotateAngleSelect">Ángulo de giro:</label>
+            <select id="rotateAngleSelect" class="form-select">
+              <option value="90">90° en sentido horario</option>
+              <option value="180">180° (boca abajo)</option>
+              <option value="270">270° (en sentido antihorario)</option>
+            </select>
+          </div>
+
+          <!-- Opción: Fotos a PDF -->
+          <div class="option-group" id="optImagesGroup" style="display: none;">
+            <label for="imgPageSizeSelect">Tamaño de página:</label>
+            <select id="imgPageSizeSelect" class="form-select">
+              <option value="a4" selected>Página estándar A4</option>
+              <option value="fit_image">Ajustar al tamaño exacto de la foto</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Barra de Progreso -->
+        <div class="progress-container" id="progressContainer">
+          <div class="progress-header">
+            <span id="progressStatusText">Procesando archivo...</span>
+            <span id="progressPercentText">0%</span>
+          </div>
+          <div class="progress-bar-track">
+            <div class="progress-bar-fill" id="progressBarFill"></div>
+          </div>
+        </div>
+
+        <!-- Pantalla de Éxito -->
+        <div class="success-screen" id="successScreen">
+          <div class="success-badge">
+            <i data-lucide="check-circle-2"></i>
+          </div>
+          <h3>¡Conversión Completada con Éxito!</h3>
+          <p id="successFileName" style="color: var(--text-secondary); margin-top: 4px; font-weight: 600;"></p>
+          
+          <div class="success-stats">
+            <div class="stat-pill" id="statOriginalSize">Original: --</div>
+            <div class="stat-pill" id="statResultSize" style="color: #10B981; font-weight: 700;">Resultado: --</div>
+          </div>
+
+          <div class="success-actions">
+            <a href="#" id="btnDownloadResult" class="btn btn-primary" download>
+              <i data-lucide="download"></i> Descargar Archivo
+            </a>
+            <button id="btnPreviewResult" class="btn btn-surface">
+              <i data-lucide="eye"></i> Previsualizar
+            </button>
+            <button id="btnConvertAnother" class="btn btn-surface">
+              <i data-lucide="rotate-ccw"></i> Otro archivo
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-footer" id="modalFooter">
+        <button class="btn btn-surface" id="btnCancelAction">Cancelar</button>
+        <button class="btn btn-primary" id="btnStartConvert" disabled>
+          <i data-lucide="zap"></i> Convertir Ahora
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== MODAL DE PREVISUALIZACIÓN ==================== -->
+  <div class="modal-backdrop" id="previewModal">
+    <div class="modal-box preview-modal-box">
+      <div class="modal-header">
+        <h3 id="previewTitle">
+          <i data-lucide="eye"></i> <span>Visualizador de Archivo</span>
+        </h3>
+        <div style="display: flex; gap: 8px;">
+          <a href="#" id="previewDownloadDirect" class="btn btn-primary" style="padding: 6px 12px; font-size: 0.8rem;" download>
+            <i data-lucide="download"></i> Descargar
+          </a>
+          <button class="btn-icon" id="btnClosePreview">
+            <i data-lucide="x"></i>
+          </button>
+        </div>
+      </div>
+      <div class="modal-body" style="padding: 10px; height: calc(100% - 70px);">
+        <div class="preview-content-area" id="previewContentArea">
+          <iframe id="previewIframe" class="preview-iframe" src="" style="display: none;"></iframe>
+          <div id="previewTextBox" class="preview-text-box" style="display: none;"></div>
+          <img id="previewImg" class="preview-img" src="" alt="Previsualización" style="display: none;">
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== MODAL WIFI / CELULAR ANDROID ==================== -->
+  <div class="modal-backdrop" id="wifiModal">
+    <div class="modal-box" style="max-width: 480px;">
+      <div class="modal-header">
+        <h3><i data-lucide="wifi"></i> <span>Conectar Celular / Android</span></h3>
+        <button class="btn-icon" id="btnCloseWifi">
+          <i data-lucide="x"></i>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="wifi-card">
+          <div class="qr-frame">
+            <img id="wifiQrCodeImg" src="" alt="Código QR WiFi">
+          </div>
+          <div class="wifi-url-box">
+            <span class="wifi-url-text" id="wifiUrlText">Cargando enlace...</span>
+            <button class="btn btn-surface" id="btnCopyWifiUrl" style="padding: 6px 10px; font-size: 0.78rem;">
+              <i data-lucide="copy"></i> Copiar
+            </button>
+          </div>
+          <ol class="wifi-steps">
+            <li>Conecta tu celular a la <strong>misma red WiFi</strong> que esta PC.</li>
+            <li>Abre la <strong>cámara de tu celular</strong> o un lector QR y escanea el código superior.</li>
+            <li>En Android, toca los 3 puntos de Chrome y selecciona <strong>"Agregar a la pantalla principal"</strong> para instalarlo como App nativa.</li>
+          </ol>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== MODAL DE HISTORIAL ==================== -->
+  <div class="modal-backdrop" id="historyModal">
+    <div class="modal-box" style="max-width: 820px;">
+      <div class="modal-header">
+        <h3><i data-lucide="history"></i> <span>Historial de Conversiones</span></h3>
+        <div style="display: flex; gap: 8px;">
+          <button class="btn btn-surface" id="btnClearHistory" style="padding: 6px 12px; font-size: 0.8rem; color: #EF4444;">
+            <i data-lucide="trash-2"></i> Vaciar Historial
+          </button>
+          <button class="btn-icon" id="btnCloseHistory">
+            <i data-lucide="x"></i>
+          </button>
+        </div>
+      </div>
+      <div class="modal-body">
+        <div id="historyTableContainer" style="overflow-x: auto;">
+          <table class="history-table">
+            <thead>
+              <tr>
+                <th>Fecha y Hora</th>
+                <th>Archivo</th>
+                <th>Operación</th>
+                <th>Tamaño</th>
+                <th style="text-align: right;">Acciones</th>
+              </tr>
+            </thead>
+            <tbody id="historyTableBody"></tbody>
+          </table>
+          <div class="history-empty" id="historyEmptyMessage" style="display: none;">
+            <i data-lucide="inbox" style="font-size: 36px; margin-bottom: 8px;"></i>
+            <p>No hay actividad reciente en el historial.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Contenedor de Toasts -->
+  <div class="toast-container" id="toastContainer"></div>
+
+  <!-- Librerías de Conversión 100% en Navegador (Client-Side & GitHub Pages) -->
+  <script src="https://unpkg.com/pdf-lib@1.17.9/dist/pdf-lib.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <script src="https://unpkg.com/docx@8.5.0/build/index.umd.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <!-- Lógica de Conversión y Controlador -->
+  <script src="./js/converter-client.js"></script>
+  <script src="./js/app.js"></script>
+</body>
+</html>

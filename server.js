@@ -358,11 +358,12 @@ const server = http.createServer(async (req, res) => {
   let safePath = path.normalize(pathname).replace(/^(\.\.[\/\\])+/, '');
   if (safePath === '/' || safePath === '\\') safePath = '/index.html';
 
-  let filePath = path.join(PUBLIC_DIR, safePath);
-
-  // Si no existe, revisar si es una ruta limpia o index
+  let filePath = path.join(__dirname, safePath);
   if (!fs.existsSync(filePath) || fs.statSync(filePath).isDirectory()) {
-    filePath = path.join(PUBLIC_DIR, 'index.html');
+    filePath = path.join(PUBLIC_DIR, safePath);
+  }
+  if (!fs.existsSync(filePath) || fs.statSync(filePath).isDirectory()) {
+    filePath = path.join(__dirname, 'index.html');
   }
 
   if (fs.existsSync(filePath)) {
