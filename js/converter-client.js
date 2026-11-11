@@ -22,10 +22,9 @@ function checkLibsLoaded() {
   }
 }
 
-// Inicializar Worker de PDF.js (jsDelivr como CDN principal)
+// Inicializar Worker de PDF.js (archivo local - sin dependencia de CDN)
 if (window.pdfjsLib) {
-  pdfjsLib.GlobalWorkerOptions.workerSrc =
-    'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
+  pdfjsLib.GlobalWorkerOptions.workerSrc = './js/libs/pdf.worker.min.js';
 }
 
 const ClientConverter = {
