@@ -80,7 +80,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Registrar Service Worker para PWA
   if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('./sw.js').catch(() => {});
+    navigator.serviceWorker.register('./sw.js').catch(error => {
+      console.error('No se pudo registrar el service worker de ConversorG.', error);
+    });
   }
 
   // ==================== TEMA OSCURO / CLARO ====================
