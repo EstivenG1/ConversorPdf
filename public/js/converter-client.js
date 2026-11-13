@@ -5,21 +5,120 @@
  * GitHub: https://github.com/EstivenG1
  */
 
-// ─── Guard: verificar que todas las librerías están disponibles ───────────────
-function checkLibsLoaded() {
-  const faltantes = [];
-  if (typeof PDFLib === 'undefined')    faltantes.push('PDFLib (pdf-lib)');
-  if (typeof pdfjsLib === 'undefined')  faltantes.push('pdfjsLib (pdf.js)');
-  if (typeof docx === 'undefined')      faltantes.push('docx');
-  if (typeof XLSX === 'undefined')      faltantes.push('XLSX (SheetJS)');
-  if (typeof PptxGenJS === 'undefined') faltantes.push('PptxGenJS');
-  if (typeof JSZip === 'undefined')     faltantes.push('JSZip');
+// ─── Guard: validar solo las librerías requeridas por cada operación ──────────
+function checkLibsLoaded(required = ['PDFLib', 'pdfjsLib', 'docx', 'XLSX', 'PptxGenJS', 'JSZip']) {
+  const libraryNames = {
+    PDFLib: 'PDFLib (pdf-lib)',
+    pdfjsLib: 'pdfjsLib (pdf.js)',
+    docx: 'docx',
+    XLSX: 'XLSX (SheetJS)',
+    PptxGenJS: 'PptxGenJS',
+    JSZip: 'JSZip'
+  };
+  const libraryIsLoaded = {
+    PDFLib: () => typeof PDFLib !== 'undefined',
+    pdfjsLib: () => typeof pdfjsLib !== 'undefined',
+    docx: () => typeof docx !== 'undefined',
+    XLSX: () => typeof XLSX !== 'undefined',
+    PptxGenJS: () => typeof PptxGenJS !== 'undefined',
+    JSZip: () => typeof JSZip !== 'undefined'
+  };
+  const faltantes = required
+    .filter(name => !libraryIsLoaded[name] || !libraryIsLoaded[name]())
+    .map(name => libraryNames[name] || name);
   if (faltantes.length > 0) {
     throw new Error(
-      `⚠️ Librerías no cargadas: ${faltantes.join(', ')}.\n` +
-      `Revisa tu conexión a internet y recarga la página.`
+      `No están disponibles las librerías requeridas: ${faltantes.join(', ')}. Comprueba que sus archivos se hayan cargado y recarga la página.`
     );
   }
+}
+
+function makeWinAnsiSafe(text, font) {
+  const replacements = {
+    '→': '->',
+    '←': '<-',
+    '↔': '<->',
+    '⇒': '=>',
+    '⇐': '<=',
+    '⇔': '<=>',
+    '↑': 'up',
+    '↓': 'down',
+    '…': '...',
+    '—': '-',
+    '–': '-',
+    '−': '-',
+    '“': '"',
+    '”': '"',
+    '‘': "'",
+    '’': "'",
+    '\u00a0': ' '
+  };
+
+  return Array.from(String(text), character => {
+    const replacement = replacements[character] || character;
+    try {
+      font.widthOfTextAtSize(replacement, 11);
+      return replacement;
+    } catch {
+      const decomposed = character.normalize('NFKD').replace(/\p{M}/gu, '');
+      try {
+        font.widthOfTextAtSize(decomposed, 11);
+        return decomposed;
+      } catch {
+        return '?';
+      }
+    }
+  }).join('');
+}
+
+function getImageType(buffer) {
+  const bytes = new Uint8Array(buffer);
+  if (
+    bytes.length >= 8 &&
+    bytes[0] === 0x89 &&
+    bytes[1] === 0x50 &&
+    bytes[2] === 0x4e &&
+    bytes[3] === 0x47 &&
+    bytes[4] === 0x0d &&
+    bytes[5] === 0x0a &&
+    bytes[6] === 0x1a &&
+    bytes[7] === 0x0a
+  ) return 'png';
+  if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return 'jpeg';
+  if (
+    bytes.length >= 12 &&
+    String.fromCharCode(...bytes.subarray(0, 4)) === 'RIFF' &&
+    String.fromCharCode(...bytes.subarray(8, 12)) === 'WEBP'
+  ) return 'webp';
+  return null;
+}
+
+async function convertWebpToPng(buffer, fileName) {
+  let bitmap;
+  try {
+    bitmap = await createImageBitmap(new Blob([buffer], { type: 'image/webp' }));
+  } catch (error) {
+    throw new Error(`No se pudo decodificar "${fileName}" como WebP. Comprueba que la imagen no esté dañada. Detalle: ${error.message}`);
+  }
+
+  const canvas = document.createElement('canvas');
+  canvas.width = bitmap.width;
+  canvas.height = bitmap.height;
+  const context = canvas.getContext('2d');
+  if (!context) {
+    bitmap.close();
+    throw new Error(`El navegador no pudo preparar "${fileName}" para convertirla a PDF.`);
+  }
+
+  context.drawImage(bitmap, 0, 0);
+  bitmap.close();
+
+  const pngBlob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+  if (!pngBlob) {
+    throw new Error(`El navegador no pudo convertir "${fileName}" de WebP a PNG.`);
+  }
+
+  return pngBlob.arrayBuffer();
 }
 
 // Inicializar Worker de PDF.js (archivo local - sin dependencia de CDN)
@@ -32,6 +131,7 @@ const ClientConverter = {
    * Helper: Extraer texto y páginas de un PDF en el navegador con PDF.js
    */
   async extractPdfTextAndPages(arrayBuffer) {
+    checkLibsLoaded(['pdfjsLib']);
     const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
     const pdfDoc = await loadingTask.promise;
     const numPages = pdfDoc.numPages;
@@ -54,7 +154,7 @@ const ClientConverter = {
    * 1. PDF A WORD (.docx)
    */
   async pdfToWord(arrayBuffer, options = {}) {
-    checkLibsLoaded();
+    checkLibsLoaded(['pdfjsLib', 'docx']);
     const { numPages, pages, fullText } = await this.extractPdfTextAndPages(arrayBuffer);
     const paragraphs = [];
 
@@ -167,7 +267,7 @@ const ClientConverter = {
    * 2. WORD (.docx) A PDF
    */
   async wordToPdf(arrayBuffer, options = {}) {
-    checkLibsLoaded();
+    checkLibsLoaded(['PDFLib', 'JSZip']);
     const zip = await JSZip.loadAsync(arrayBuffer);
     const documentXml = await zip.file('word/document.xml')?.async('string');
 
@@ -194,6 +294,7 @@ const ClientConverter = {
     const pdfDoc = await PDFDocument.create();
     const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
     const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+    const pdfLines = extractedLines.map(line => makeWinAnsiSafe(line, font));
 
     const pageWidth = 595.28;
     const pageHeight = 841.89;
@@ -239,7 +340,7 @@ const ClientConverter = {
     let pageIdx = 1;
     drawHeaderFooter(currentPage, pageIdx);
 
-    for (const rawLine of extractedLines) {
+    for (const rawLine of pdfLines) {
       const words = rawLine.split(' ');
       let currentLine = '';
 
@@ -282,7 +383,7 @@ const ClientConverter = {
    * 3. UNIR PDF (Merge)
    */
   async mergePdfs(buffersList, options = {}) {
-    checkLibsLoaded();
+    checkLibsLoaded(['PDFLib']);
     const { PDFDocument } = PDFLib;
     const mergedDoc = await PDFDocument.create();
 
@@ -302,7 +403,7 @@ const ClientConverter = {
    * 4. DIVIDIR PDF (Split)
    */
   async splitPdf(arrayBuffer, options = {}) {
-    checkLibsLoaded();
+    checkLibsLoaded(['PDFLib']);
     const { PDFDocument } = PDFLib;
     const srcDoc = await PDFDocument.load(arrayBuffer, { ignoreEncryption: true });
     const totalPages = srcDoc.getPageCount();
@@ -325,6 +426,7 @@ const ClientConverter = {
     }
 
     // Dividir todas en un ZIP
+    checkLibsLoaded(['JSZip']);
     const zip = new JSZip();
     for (let i = 0; i < totalPages; i++) {
       const singleDoc = await PDFDocument.create();
@@ -365,7 +467,7 @@ const ClientConverter = {
    * 5. PDF A EXCEL (.xlsx)
    */
   async pdfToExcel(arrayBuffer, options = {}) {
-    checkLibsLoaded();
+    checkLibsLoaded(['pdfjsLib', 'XLSX']);
     const { numPages, pages } = await this.extractPdfTextAndPages(arrayBuffer);
     const sheetData = [];
 
@@ -408,7 +510,7 @@ const ClientConverter = {
    * 6. EXCEL A PDF (.xlsx -> .pdf)
    */
   async excelToPdf(arrayBuffer, options = {}) {
-    checkLibsLoaded();
+    checkLibsLoaded(['PDFLib', 'XLSX']);
     const wb = XLSX.read(arrayBuffer, { type: 'array' });
     const sheetNames = wb.SheetNames;
     if (!sheetNames || sheetNames.length === 0) throw new Error('El archivo Excel no tiene hojas.');
@@ -496,7 +598,7 @@ const ClientConverter = {
    * 7. PDF A POWERPOINT (.pptx)
    */
   async pdfToPptx(arrayBuffer, options = {}) {
-    checkLibsLoaded();
+    checkLibsLoaded(['pdfjsLib', 'PptxGenJS']);
     const { numPages, pages } = await this.extractPdfTextAndPages(arrayBuffer);
     const pptx = new PptxGenJS();
     pptx.layout = 'LAYOUT_WIDE';
@@ -579,7 +681,7 @@ const ClientConverter = {
    * 8. POWERPOINT (.pptx) A PDF
    */
   async pptxToPdf(arrayBuffer, options = {}) {
-    checkLibsLoaded();
+    checkLibsLoaded(['PDFLib', 'JSZip']);
     const zip = await JSZip.loadAsync(arrayBuffer);
     const slideFiles = Object.keys(zip.files).filter(f => /^ppt\/slides\/slide\d+\.xml$/.test(f));
     slideFiles.sort((a, b) => {
@@ -649,20 +751,31 @@ const ClientConverter = {
    * 9. IMÁGENES A PDF
    */
   async imagesToPdf(imagesList, options = {}) {
-    checkLibsLoaded();
+    checkLibsLoaded(['PDFLib']);
     const { PDFDocument } = PDFLib;
     const pdfDoc = await PDFDocument.create();
 
     for (const img of imagesList) {
-      let embeddedImg;
-      const isPng = (img.type && img.type.includes('png')) || img.name.toLowerCase().endsWith('.png');
-
-      try {
-        embeddedImg = isPng ? await pdfDoc.embedPng(img.buffer) : await pdfDoc.embedJpg(img.buffer);
-      } catch (_) {
-        embeddedImg = isPng ? await pdfDoc.embedJpg(img.buffer) : await pdfDoc.embedPng(img.buffer);
+      let buffer = img.buffer;
+      let imageType = getImageType(buffer);
+      if (!imageType) {
+        const extension = img.name.split('.').pop().toLowerCase();
+        const declaredType = (img.type || '').toLowerCase();
+        if (extension === 'webp' || declaredType === 'image/webp') {
+          imageType = 'webp';
+        } else {
+          throw new Error(`"${img.name}" no contiene una imagen JPEG, PNG o WebP válida. Comprueba que el archivo no esté dañado o que su extensión coincida con su contenido.`);
+        }
       }
 
+      if (imageType === 'webp') {
+        buffer = await convertWebpToPng(buffer, img.name);
+        imageType = 'png';
+      }
+
+      const embeddedImg = imageType === 'png'
+        ? await pdfDoc.embedPng(buffer)
+        : await pdfDoc.embedJpg(buffer);
       const dims = embeddedImg.scale(1);
       let pWidth = 595.28;
       let pHeight = 841.89;
@@ -697,7 +810,7 @@ const ClientConverter = {
    * 10. PDF A IMÁGENES JPG (Renderizado HD con Canvas en Navegador)
    */
   async pdfToJpg(arrayBuffer, options = {}) {
-    checkLibsLoaded();
+    checkLibsLoaded(['pdfjsLib', 'JSZip']);
     const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
     const pdfDoc = await loadingTask.promise;
     const numPages = pdfDoc.numPages;
@@ -726,7 +839,7 @@ const ClientConverter = {
    * 11. COMPRIMIR PDF
    */
   async compressPdf(arrayBuffer, options = {}) {
-    checkLibsLoaded();
+    checkLibsLoaded(['PDFLib']);
     const { PDFDocument } = PDFLib;
     const doc = await PDFDocument.load(arrayBuffer, { ignoreEncryption: true });
     const compressedBytes = await doc.save({ useObjectStreams: true });
@@ -737,7 +850,7 @@ const ClientConverter = {
    * 12. ROTAR PÁGINAS DE PDF
    */
   async rotatePdf(arrayBuffer, degreesAngle = 90) {
-    checkLibsLoaded();
+    checkLibsLoaded(['PDFLib']);
     const { PDFDocument, degrees } = PDFLib;
     const doc = await PDFDocument.load(arrayBuffer, { ignoreEncryption: true });
     const pages = doc.getPages();
@@ -756,7 +869,7 @@ const ClientConverter = {
    * 13. MARCA DE AGUA ("ConversorG")
    */
   async watermarkPdf(arrayBuffer, text = 'ConversorG', options = {}) {
-    checkLibsLoaded();
+    checkLibsLoaded(['PDFLib']);
     const { PDFDocument, rgb, degrees, StandardFonts } = PDFLib;
     const doc = await PDFDocument.load(arrayBuffer, { ignoreEncryption: true });
     const font = await doc.embedFont(StandardFonts.HelveticaBold);
@@ -788,7 +901,7 @@ const ClientConverter = {
    * 14. EXTRAER TEXTO PLANO
    */
   async extractText(arrayBuffer) {
-    checkLibsLoaded();
+    checkLibsLoaded(['pdfjsLib']);
     const { numPages, fullText } = await this.extractPdfTextAndPages(arrayBuffer);
     const blob = new Blob([fullText], { type: 'text/plain;charset=utf-8' });
     return { blob, text: fullText, numPages };
