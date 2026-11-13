@@ -33,6 +33,44 @@ function checkLibsLoaded(required = ['PDFLib', 'pdfjsLib', 'docx', 'XLSX', 'Pptx
   }
 }
 
+function makeWinAnsiSafe(text, font) {
+  const replacements = {
+    '→': '->',
+    '←': '<-',
+    '↔': '<->',
+    '⇒': '=>',
+    '⇐': '<=',
+    '⇔': '<=>',
+    '↑': 'up',
+    '↓': 'down',
+    '…': '...',
+    '—': '-',
+    '–': '-',
+    '−': '-',
+    '“': '"',
+    '”': '"',
+    '‘': "'",
+    '’': "'",
+    '\u00a0': ' '
+  };
+
+  return Array.from(String(text), character => {
+    const replacement = replacements[character] || character;
+    try {
+      font.widthOfTextAtSize(replacement, 11);
+      return replacement;
+    } catch {
+      const decomposed = character.normalize('NFKD').replace(/\p{M}/gu, '');
+      try {
+        font.widthOfTextAtSize(decomposed, 11);
+        return decomposed;
+      } catch {
+        return '?';
+      }
+    }
+  }).join('');
+}
+
 function getImageType(buffer) {
   const bytes = new Uint8Array(buffer);
   if (
@@ -256,6 +294,7 @@ const ClientConverter = {
     const pdfDoc = await PDFDocument.create();
     const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
     const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+    const pdfLines = extractedLines.map(line => makeWinAnsiSafe(line, font));
 
     const pageWidth = 595.28;
     const pageHeight = 841.89;
@@ -301,7 +340,7 @@ const ClientConverter = {
     let pageIdx = 1;
     drawHeaderFooter(currentPage, pageIdx);
 
-    for (const rawLine of extractedLines) {
+    for (const rawLine of pdfLines) {
       const words = rawLine.split(' ');
       let currentLine = '';
 
