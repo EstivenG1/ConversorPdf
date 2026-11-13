@@ -275,104 +275,465 @@ const ClientConverter = {
       throw new Error('El archivo DOCX no contiene estructura válida (word/document.xml).');
     }
 
-    const paragraphMatches = documentXml.match(/<w:p[\s>][\s\S]*?<\/w:p>/g) || [];
-    const extractedLines = [];
-
-    for (const pXml of paragraphMatches) {
-      const textMatches = pXml.match(/<w:t[\s>][\s\S]*?<\/w:t>/g) || [];
-      let pText = '';
-      for (const tXml of textMatches) {
-        pText += tXml.replace(/<[^>]+>/g, '');
-      }
-      pText = pText.trim();
-      if (pText) extractedLines.push(pText);
+    const wordNamespace = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+    const xmlDocument = new DOMParser().parseFromString(documentXml, 'application/xml');
+    if (xmlDocument.getElementsByTagName('parsererror').length > 0) {
+      throw new Error('El documento Word contiene XML dañado y no se pudo interpretar.');
     }
 
-    if (extractedLines.length === 0) extractedLines.push('Documento Word procesado.');
+    const getWordChild = (node, name) => Array.from(node?.children || [])
+      .find(child => child.namespaceURI === wordNamespace && child.localName === name) || null;
+    const getWordValue = node => node?.getAttributeNS(wordNamespace, 'val') ?? null;
+    const getWordAttributes = node => {
+      if (!node) return null;
+      return Object.fromEntries(Array.from(node.attributes)
+        .filter(attribute => attribute.namespaceURI === wordNamespace)
+        .map(attribute => [attribute.localName, attribute.value]));
+    };
 
-    const { PDFDocument, rgb, StandardFonts } = PDFLib;
+    const stylesXml = await zip.file('word/styles.xml')?.async('string');
+    const stylesDocument = stylesXml
+      ? new DOMParser().parseFromString(stylesXml, 'application/xml')
+      : null;
+    const stylesRoot = stylesDocument?.documentElement || null;
+    const styleMap = new Map();
+    const defaultStyles = {};
+    for (const style of Array.from(stylesRoot?.getElementsByTagNameNS(wordNamespace, 'style') || [])) {
+      const styleId = style.getAttributeNS(wordNamespace, 'styleId');
+      const styleType = style.getAttributeNS(wordNamespace, 'type');
+      if (!styleId || !styleType) continue;
+      styleMap.set(styleId, style);
+      if (style.getAttributeNS(wordNamespace, 'default') === '1') defaultStyles[styleType] = styleId;
+    }
+
+    function findStyleProperty(styleId, sectionName, propertyName, styleType) {
+      const visited = new Set();
+      let currentId = styleId || defaultStyles[styleType];
+      while (currentId && !visited.has(currentId)) {
+        visited.add(currentId);
+        const style = styleMap.get(currentId);
+        if (!style) break;
+        const property = getWordChild(getWordChild(style, sectionName), propertyName);
+        if (property) return property;
+        currentId = getWordValue(getWordChild(style, 'basedOn'));
+      }
+
+      if (styleId && defaultStyles[styleType] && styleId !== defaultStyles[styleType]) {
+        return findStyleProperty(defaultStyles[styleType], sectionName, propertyName, styleType);
+      }
+      const defaultsName = sectionName === 'pPr' ? 'pPrDefault' : 'rPrDefault';
+      const defaultSection = getWordChild(
+        getWordChild(getWordChild(stylesRoot, 'docDefaults'), defaultsName),
+        sectionName
+      );
+      return getWordChild(defaultSection, propertyName);
+    }
+
+    function getEffectiveProperty(directProperties, propertyName, styleId, sectionName, styleType) {
+      return getWordChild(directProperties, propertyName) ||
+        findStyleProperty(styleId, sectionName, propertyName, styleType);
+    }
+
+    const documentBody = xmlDocument.getElementsByTagNameNS(wordNamespace, 'body')[0];
+    if (!documentBody) {
+      throw new Error('El archivo Word no contiene un cuerpo de documento válido.');
+    }
+
+    const paragraphNodes = Array.from(documentBody.getElementsByTagNameNS(wordNamespace, 'p'));
+    const parsedParagraphs = paragraphNodes.map(paragraph => {
+      const paragraphProperties = getWordChild(paragraph, 'pPr');
+      const paragraphStyleId = getWordValue(getWordChild(paragraphProperties, 'pStyle'));
+      const paragraphProperty = name =>
+        getEffectiveProperty(paragraphProperties, name, paragraphStyleId, 'pPr', 'paragraph');
+      const spacing = getWordAttributes(paragraphProperty('spacing')) || {};
+      const indentation = getWordAttributes(paragraphProperty('ind')) || {};
+      const alignment = getWordValue(paragraphProperty('jc')) || 'left';
+      const pageBreakBeforeProperty = paragraphProperty('pageBreakBefore');
+      const fragments = [];
+
+      function collectRunContent(node, currentRunProperties = null) {
+        if (node.namespaceURI === wordNamespace && node.localName === 'del') return;
+        if (node.namespaceURI === wordNamespace && node.localName === 'r') {
+          currentRunProperties = getWordChild(node, 'rPr');
+        }
+        if (node.namespaceURI === wordNamespace && node.localName === 't') {
+          fragments.push({ text: node.textContent, properties: currentRunProperties });
+          return;
+        }
+        if (node.namespaceURI === wordNamespace && node.localName === 'tab') {
+          fragments.push({ text: '    ', properties: currentRunProperties });
+          return;
+        }
+        if (node.namespaceURI === wordNamespace && (node.localName === 'br' || node.localName === 'cr')) {
+          fragments.push({
+            text: '\n',
+            properties: currentRunProperties,
+            pageBreak: getWordAttributes(node)?.type === 'page'
+          });
+          return;
+        }
+        for (const child of Array.from(node.children || [])) {
+          collectRunContent(child, currentRunProperties);
+        }
+      }
+
+      collectRunContent(paragraph);
+      return {
+        fragments,
+        paragraphStyleId,
+        alignment,
+        spacing,
+        indentation,
+        pageBreakBefore: pageBreakBeforeProperty !== null &&
+          !['0', 'false', 'off'].includes((getWordValue(pageBreakBeforeProperty) || '1').toLowerCase())
+      };
+    });
+
+    if (!parsedParagraphs.some(paragraph => paragraph.fragments.some(fragment => fragment.text.trim()))) {
+      parsedParagraphs.push({
+        fragments: [{ text: 'Documento Word procesado.', properties: null }],
+        paragraphStyleId: null,
+        alignment: 'left',
+        spacing: {},
+        indentation: {},
+        pageBreakBefore: false
+      });
+    }
+
+    const { PDFDocument, rgb, StandardFonts, PDFName, PDFString } = PDFLib;
     const pdfDoc = await PDFDocument.create();
-    const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
-    const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
-    const pdfLines = extractedLines.map(line => makeWinAnsiSafe(line, font));
+    const stylesDefaults = getWordChild(getWordChild(stylesRoot, 'docDefaults'), 'rPrDefault');
+    const defaultRunProperties = getWordChild(stylesDefaults, 'rPr');
+    const defaultFontProperties = getEffectiveProperty(
+      defaultRunProperties, 'rFonts', defaultStyles.character, 'rPr', 'character'
+    );
+    const defaultFontName = defaultFontProperties?.getAttributeNS(wordNamespace, 'hAnsi') ||
+      defaultFontProperties?.getAttributeNS(wordNamespace, 'ascii') || 'Calibri';
+    const defaultSizeProperty = getEffectiveProperty(
+      defaultRunProperties, 'sz', defaultStyles.character, 'rPr', 'character'
+    );
+    const defaultFontSize = Number(getWordValue(defaultSizeProperty)) / 2 || 11;
+    const fontCache = new Map();
 
-    const pageWidth = 595.28;
-    const pageHeight = 841.89;
-    const margin = 50;
-    const contentWidth = pageWidth - margin * 2;
-    const fontSize = 11;
-    const lineHeight = 16;
-    const maxY = pageHeight - margin - 30;
-    const minY = margin + 30;
+    function resolveRunProperty(runProperties, propertyName, paragraphStyleId) {
+      const characterStyleId = getWordValue(getWordChild(runProperties, 'rStyle'));
+      return getEffectiveProperty(runProperties, propertyName, characterStyleId, 'rPr', 'character') ||
+        findStyleProperty(paragraphStyleId, 'rPr', propertyName, 'paragraph') ||
+        findStyleProperty(defaultStyles.character, 'rPr', propertyName, 'character');
+    }
 
-    let currentPage = pdfDoc.addPage([pageWidth, pageHeight]);
-    let currentY = maxY;
+    function getStandardFontName(runProperties, paragraphStyleId) {
+      const fontProperties = resolveRunProperty(runProperties, 'rFonts', paragraphStyleId);
+      const family = (
+        fontProperties?.getAttributeNS(wordNamespace, 'hAnsi') ||
+        fontProperties?.getAttributeNS(wordNamespace, 'ascii') ||
+        defaultFontName
+      ).toLowerCase();
+      const familyPrefix = /times|cambria|georgia/.test(family)
+        ? 'TimesRoman'
+        : /courier|consolas/.test(family)
+          ? 'Courier'
+          : 'Helvetica';
+      const boldProperty = resolveRunProperty(runProperties, 'b', paragraphStyleId);
+      const italicProperty = resolveRunProperty(runProperties, 'i', paragraphStyleId);
+      const isOn = property => property !== null &&
+        !['0', 'false', 'off'].includes((getWordValue(property) || '1').toLowerCase());
+      const bold = isOn(boldProperty);
+      const italic = isOn(italicProperty);
+      if (familyPrefix === 'Helvetica') {
+        return bold ? (italic ? 'HelveticaBoldOblique' : 'HelveticaBold') : (italic ? 'HelveticaOblique' : 'Helvetica');
+      }
+      if (familyPrefix === 'Courier') {
+        return bold ? (italic ? 'CourierBoldOblique' : 'CourierBold') : (italic ? 'CourierOblique' : 'Courier');
+      }
+      return bold ? (italic ? 'TimesRomanBoldItalic' : 'TimesRomanBold') : (italic ? 'TimesRomanItalic' : 'TimesRoman');
+    }
 
-    function drawHeaderFooter(page, pageNum) {
-      page.drawText('ConversorG • Documento Convertido', {
-        x: margin,
-        y: pageHeight - margin + 15,
-        size: 9,
-        font: fontBold,
-        color: rgb(0, 0.38, 0.22) // Verde Rolex
-      });
-      page.drawLine({
-        start: { x: margin, y: pageHeight - margin + 10 },
-        end: { x: pageWidth - margin, y: pageHeight - margin + 10 },
-        thickness: 0.8,
-        color: rgb(0.85, 0.82, 0.75)
-      });
-      page.drawLine({
-        start: { x: margin, y: margin + 15 },
-        end: { x: pageWidth - margin, y: margin + 15 },
-        thickness: 0.8,
-        color: rgb(0.85, 0.82, 0.75)
-      });
-      page.drawText(`Página ${pageNum} | Creado con ConversorG (Estiven Garces)`, {
-        x: margin,
-        y: margin,
+    async function getRunStyle(fragment, paragraphStyleId) {
+      const properties = fragment.properties;
+      const sizeProperty = resolveRunProperty(properties, 'sz', paragraphStyleId);
+      const fontSize = Number(getWordValue(sizeProperty)) / 2 || defaultFontSize;
+      const standardFontName = getStandardFontName(properties, paragraphStyleId);
+      if (!fontCache.has(standardFontName)) {
+        fontCache.set(standardFontName, await pdfDoc.embedFont(StandardFonts[standardFontName]));
+      }
+      const colorProperty = resolveRunProperty(properties, 'color', paragraphStyleId);
+      const colorValue = getWordValue(colorProperty);
+      const color = colorValue && /^[0-9a-f]{6}$/i.test(colorValue)
+        ? rgb(
+          parseInt(colorValue.slice(0, 2), 16) / 255,
+          parseInt(colorValue.slice(2, 4), 16) / 255,
+          parseInt(colorValue.slice(4, 6), 16) / 255
+        )
+        : rgb(0.1, 0.12, 0.1);
+      const underlineProperty = resolveRunProperty(properties, 'u', paragraphStyleId);
+      return {
+        font: fontCache.get(standardFontName),
+        fontSize,
+        color,
+        underline: underlineProperty !== null && getWordValue(underlineProperty) !== 'none'
+      };
+    }
+
+    const body = xmlDocument.getElementsByTagNameNS(wordNamespace, 'body')[0];
+    const sectionProperties = Array.from(body.getElementsByTagNameNS(wordNamespace, 'sectPr')).pop();
+    const pageSize = getWordAttributes(getWordChild(sectionProperties, 'pgSz')) || {};
+    const pageMargins = getWordAttributes(getWordChild(sectionProperties, 'pgMar')) || {};
+    const twipsToPoints = (value, fallback) => value === undefined ? fallback : Number(value) / 20;
+    const pageWidth = twipsToPoints(pageSize.w, 595.28);
+    const pageHeight = twipsToPoints(pageSize.h, 841.89);
+    const marginTop = twipsToPoints(pageMargins.top, 72);
+    const marginRight = twipsToPoints(pageMargins.right, 72);
+    const marginBottom = twipsToPoints(pageMargins.bottom, 72);
+    const marginLeft = twipsToPoints(pageMargins.left, 72);
+    const contentBottom = marginBottom + 18;
+    const contentTop = pageHeight - marginTop;
+    const sourceUrl = 'https://estiveng1.github.io/ConversorPdf/';
+    let currentPage;
+    let currentY;
+    let pageNumber = 0;
+
+    function addPage() {
+      currentPage = pdfDoc.addPage([pageWidth, pageHeight]);
+      pageNumber++;
+      currentY = contentTop;
+      const pageNumberText = String(pageNumber);
+      const numberFont = fontCache.get('Helvetica');
+      const numberWidth = numberFont.widthOfTextAtSize(pageNumberText, 8);
+      currentPage.drawText('ConversorG • Documento convertido', {
+        x: marginLeft,
+        y: pageHeight - Math.max(18, marginTop / 2),
         size: 8,
-        font: font,
+        font: numberFont,
+        color: rgb(0.45, 0.5, 0.45)
+      });
+      currentPage.drawText(pageNumberText, {
+        x: pageWidth - marginRight - numberWidth,
+        y: pageHeight - Math.max(18, marginTop / 2),
+        size: 8,
+        font: numberFont,
         color: rgb(0.45, 0.5, 0.45)
       });
     }
 
-    let pageIdx = 1;
-    drawHeaderFooter(currentPage, pageIdx);
+    async function ensurePage() {
+      if (!currentPage) {
+        if (!fontCache.has('Helvetica')) {
+          fontCache.set('Helvetica', await pdfDoc.embedFont(StandardFonts.Helvetica));
+        }
+        addPage();
+      }
+    }
 
-    for (const rawLine of pdfLines) {
-      const words = rawLine.split(' ');
-      let currentLine = '';
+    function addFooterLink(page) {
+      const prefix = `Página ${pageNumber} | Creado con ConversorG - `;
+      const footerFont = fontCache.get('Helvetica');
+      const footerSize = 8;
+      const footerX = marginLeft;
+      const footerY = Math.max(10, marginBottom / 2 - 4);
+      const safePrefix = makeWinAnsiSafe(prefix, footerFont);
+      const safeUrl = makeWinAnsiSafe(sourceUrl, footerFont);
+      const prefixWidth = footerFont.widthOfTextAtSize(safePrefix, footerSize);
+      const urlWidth = footerFont.widthOfTextAtSize(safeUrl, footerSize);
+      page.drawText(safePrefix, {
+        x: footerX,
+        y: footerY,
+        size: footerSize,
+        font: footerFont,
+        color: rgb(0.45, 0.5, 0.45)
+      });
+      page.drawText(safeUrl, {
+        x: footerX + prefixWidth,
+        y: footerY,
+        size: footerSize,
+        font: footerFont,
+        color: rgb(0, 0.38, 0.22)
+      });
+      page.drawLine({
+        start: { x: footerX + prefixWidth, y: footerY - 1 },
+        end: { x: footerX + prefixWidth + urlWidth, y: footerY - 1 },
+        thickness: 0.35,
+        color: rgb(0, 0.38, 0.22)
+      });
+      const annotation = pdfDoc.context.obj({
+        Type: PDFName.of('Annot'),
+        Subtype: PDFName.of('Link'),
+        Rect: [footerX + prefixWidth, footerY - 1, footerX + prefixWidth + urlWidth, footerY + footerSize + 2],
+        Border: [0, 0, 0],
+        A: {
+          Type: PDFName.of('Action'),
+          S: PDFName.of('URI'),
+          URI: PDFString.of(sourceUrl)
+        }
+      });
+      page.node.addAnnot(pdfDoc.context.register(annotation));
+    }
 
-      for (const word of words) {
-        const testLine = currentLine ? `${currentLine} ${word}` : word;
-        const textWidth = font.widthOfTextAtSize(testLine, fontSize);
+    function startNewPage() {
+      addPage();
+    }
 
-        if (textWidth > contentWidth && currentLine) {
-          if (currentY <= minY) {
-            currentPage = pdfDoc.addPage([pageWidth, pageHeight]);
-            pageIdx++;
-            drawHeaderFooter(currentPage, pageIdx);
-            currentY = maxY;
+    function appendTextToLayout(text, style, maxWidth, layout) {
+      const pushLine = (force = false) => {
+        if (layout.currentLine.length || force) {
+          layout.lines.push({ fragments: layout.currentLine, width: layout.currentWidth });
+        }
+        layout.currentLine = [];
+        layout.currentWidth = 0;
+      };
+      const appendToken = token => {
+        const width = style.font.widthOfTextAtSize(token, style.fontSize);
+        if (/^\s+$/.test(token)) {
+          if (layout.currentLine.length && layout.currentWidth + width <= maxWidth) {
+            layout.currentLine.push({ text: token, style });
+            layout.currentWidth += width;
           }
-          currentPage.drawText(currentLine, { x: margin, y: currentY, size: fontSize, font, color: rgb(0.1, 0.12, 0.1) });
-          currentY -= lineHeight;
-          currentLine = word;
-        } else {
-          currentLine = testLine;
+          return;
         }
+        if (layout.currentLine.length && layout.currentWidth + width > maxWidth) pushLine();
+        if (width <= maxWidth) {
+          layout.currentLine.push({ text: token, style });
+          layout.currentWidth += width;
+          return;
+        }
+        let chunk = '';
+        for (const character of Array.from(token)) {
+          const nextChunk = chunk + character;
+          if (chunk && style.font.widthOfTextAtSize(nextChunk, style.fontSize) > maxWidth) {
+            const chunkWidth = style.font.widthOfTextAtSize(chunk, style.fontSize);
+            layout.currentLine.push({ text: chunk, style });
+            layout.currentWidth += chunkWidth;
+            pushLine();
+            chunk = character;
+          } else {
+            chunk = nextChunk;
+          }
+        }
+        if (chunk) {
+          layout.currentLine.push({ text: chunk, style });
+          layout.currentWidth += style.font.widthOfTextAtSize(chunk, style.fontSize);
+        }
+      };
+
+      for (const part of text.split(/(\n)/)) {
+        if (part === '\n') {
+          pushLine(true);
+          continue;
+        }
+        for (const token of part.match(/\s+|[^\s]+/g) || []) appendToken(token);
+      }
+    }
+
+    async function renderParagraph(paragraph) {
+      if (!currentPage) await ensurePage();
+      if (paragraph.pageBreakBefore && currentY < contentTop) {
+        startNewPage();
+      }
+      const paragraphProperties = paragraph.spacing;
+      const indent = paragraph.indentation;
+      const leftIndent = Number(indent.left) / 20 || 0;
+      const rightIndent = Number(indent.right) / 20 || 0;
+      const firstLineIndent = Number(indent.firstLine) / 20 ||
+        (indent.hanging ? -(Number(indent.hanging) / 20) : 0);
+      const availableWidth = Math.max(24, pageWidth - marginLeft - marginRight - leftIndent - rightIndent);
+      const maxLineWidth = Math.max(24, availableWidth - Math.max(0, firstLineIndent));
+      const layout = { lines: [], currentLine: [], currentWidth: 0 };
+
+      for (const fragment of paragraph.fragments) {
+        if (fragment.pageBreak) {
+          if (layout.currentLine.length) {
+            layout.lines.push({ fragments: layout.currentLine, width: layout.currentWidth });
+            layout.currentLine = [];
+            layout.currentWidth = 0;
+          }
+          layout.lines.push({ pageBreak: true });
+          continue;
+        }
+        const style = await getRunStyle(fragment, paragraph.paragraphStyleId);
+        const safeText = makeWinAnsiSafe(fragment.text, style.font);
+        appendTextToLayout(safeText, style, maxLineWidth, layout);
+      }
+      if (layout.currentLine.length) {
+        layout.lines.push({ fragments: layout.currentLine, width: layout.currentWidth });
       }
 
-      if (currentLine) {
-        if (currentY <= minY) {
-          currentPage = pdfDoc.addPage([pageWidth, pageHeight]);
-          pageIdx++;
-          drawHeaderFooter(currentPage, pageIdx);
-          currentY = maxY;
+      const before = Number(paragraphProperties.before) / 20 || 0;
+      const after = Number(paragraphProperties.after) / 20 || 0;
+      const lineValue = Number(paragraphProperties.line) || 0;
+      const lineRule = paragraphProperties.lineRule || 'auto';
+      currentY -= before;
+
+      let firstLine = true;
+      const textLines = layout.lines.filter(line => !line.pageBreak);
+      const lastTextLine = textLines[textLines.length - 1];
+      for (const line of layout.lines) {
+        if (line.pageBreak) {
+          if (currentY < contentTop) startNewPage();
+          firstLine = true;
+          continue;
         }
-        currentPage.drawText(currentLine, { x: margin, y: currentY, size: fontSize, font, color: rgb(0.1, 0.12, 0.1) });
-        currentY -= lineHeight + 6;
+        const lineFragments = line.fragments || [];
+        const maxFontSize = lineFragments.reduce((max, fragment) => Math.max(max, fragment.style.fontSize), defaultFontSize);
+        const lineHeight = !lineValue
+          ? maxFontSize * 1.2
+          : lineRule === 'auto'
+            ? (lineValue / 240) * maxFontSize
+            : lineRule === 'atLeast'
+              ? Math.max(maxFontSize * 1.2, lineValue / 20)
+              : lineValue / 20;
+        if (currentY - lineHeight < contentBottom) {
+          startNewPage();
+          firstLine = true;
+        }
+        const paragraphOffset = leftIndent + (firstLine ? firstLineIndent : 0);
+        const lineWidth = line.width || 0;
+        const alignment = paragraph.alignment;
+        const isJustified = ['both', 'distribute', 'thaiDistribute'].includes(alignment) &&
+          line !== lastTextLine;
+        const spaceCount = isJustified
+          ? lineFragments.reduce((count, fragment) => count + (fragment.text.match(/ /g) || []).length, 0)
+          : 0;
+        const extraSpace = spaceCount > 0 ? Math.max(0, availableWidth - paragraphOffset - lineWidth) / spaceCount : 0;
+        let x = marginLeft + paragraphOffset;
+        if (alignment === 'center') {
+          x += Math.max(0, (availableWidth - paragraphOffset - lineWidth) / 2);
+        } else if (alignment === 'right' || alignment === 'end') {
+          x += Math.max(0, availableWidth - paragraphOffset - lineWidth);
+        }
+
+        for (const fragment of lineFragments) {
+          const fragmentWidth = fragment.style.font.widthOfTextAtSize(fragment.text, fragment.style.fontSize);
+          currentPage.drawText(fragment.text, {
+            x,
+            y: currentY,
+            size: fragment.style.fontSize,
+            font: fragment.style.font,
+            color: fragment.style.color
+          });
+          if (fragment.style.underline) {
+            currentPage.drawLine({
+              start: { x, y: currentY - 1 },
+              end: { x: x + fragmentWidth, y: currentY - 1 },
+              thickness: 0.5,
+              color: fragment.style.color
+            });
+          }
+          const spaces = (fragment.text.match(/ /g) || []).length;
+          x += fragmentWidth + spaces * extraSpace;
+        }
+        currentY -= lineHeight;
+        firstLine = false;
       }
+      currentY -= after;
+    }
+
+    for (const paragraph of parsedParagraphs) {
+      await renderParagraph(paragraph);
+    }
+
+    for (const [index, page] of pdfDoc.getPages().entries()) {
+      pageNumber = index + 1;
+      addFooterLink(page);
     }
 
     const pdfBytes = await pdfDoc.save();
@@ -875,8 +1236,8 @@ const ClientConverter = {
     const font = await doc.embedFont(StandardFonts.HelveticaBold);
     const pages = doc.getPages();
 
-    const opacity = options.opacity ? Number(options.opacity) : 0.22;
-    const size = options.size ? Number(options.size) : 48;
+    const opacity = options.opacity ? Number(options.opacity) : 0.15;
+    const size = options.size ? Number(options.size) : 24;
     const rot = options.rotation !== undefined ? Number(options.rotation) : 45;
 
     for (const page of pages) {

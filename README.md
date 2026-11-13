@@ -83,7 +83,7 @@ Diseñada pensando en el confort visual, la calidez y el lujo sobrio:
 
 ### 📄 Conversores PDF y Microsoft Office
 1. **Convertir PDF a Word (.docx):** Extrae texto, párrafos y estructura de documentos PDF generando un archivo DOCX editable.
-2. **Convertir Word (.docx) a PDF:** Convierte documentos de Microsoft Word a PDF con paginación, estilo limpio y pie de página.
+2. **Convertir Word (.docx) a PDF:** Conserva formato de párrafo y texto, tamaño y márgenes de página, alineación, sangría, espaciado, negrita y cursiva. Tablas, imágenes y maquetaciones avanzadas pueden variar. Incluye numeración y enlace de ConversorG discreto en cada página.
 3. **Unir PDF (Merge):** Fusiona dos o más documentos PDF en un solo archivo en el orden deseado.
 4. **Dividir PDF (Split):** Extrae rangos específicos (ejemplo: `1-3, 5, 8`) o divide cada página en archivos individuales dentro de un ZIP.
 5. **PDF a Excel (.xlsx):** Detecta tablas, columnas y datos numéricos en el PDF y genera una hoja de cálculo Excel lista para trabajar.
@@ -98,7 +98,7 @@ Diseñada pensando en el confort visual, la calidez y el lujo sobrio:
 ### 🛠️ Herramientas de Optimización y Edición
 11. **Comprimir PDF:** Optimiza la estructura interna. El ahorro depende del contenido; la aplicación informa si el archivo no quedó más pequeño, algo habitual en PDFs que ya tienen imágenes comprimidas.
 12. **Rotar Páginas de PDF:** Gira páginas a 90°, 180° o 270° en caso de escaneos invertidos.
-13. **Marca de Agua Personalizada ("ConversorG"):** Aplica una marca de agua diagonal semi-transparente en todas las páginas para proteger los documentos.
+13. **Marca de Agua Personalizada ("ConversorG"):** Aplica una marca diagonal discreta (24 pt, 15% de opacidad por defecto) en todas las páginas; la opacidad puede aumentarse desde las opciones.
 14. **Extraer Texto Plano:** Extrae todo el contenido de texto limpio a archivo `.txt` y permite copiarlo directo al portapapeles.
 15. **Historial de Actividad Persistente:** Registra cada conversión con fecha, hora, tamaño original, tamaño final, porcentaje de ahorro y acciones inmediatas.
 16. **Diagnóstico de errores:** Explica posibles causas en español y permite copiar datos técnicos de la página, la operación, los archivos y las librerías, sin incluir su contenido.
