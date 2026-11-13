@@ -334,6 +334,38 @@ const ClientConverter = {
         findStyleProperty(styleId, sectionName, propertyName, styleType);
     }
 
+    function findTableStyleBorder(styleId, regions, sectionName, side) {
+      const visited = new Set();
+      let currentId = styleId;
+      while (currentId && !visited.has(currentId)) {
+        visited.add(currentId);
+        const style = styleMap.get(currentId);
+        if (!style) break;
+        const conditionalStyles = Array.from(style.children || [])
+          .filter(child => child.namespaceURI === wordNamespace && child.localName === 'tblStylePr');
+        for (const region of regions) {
+          const conditionalStyle = conditionalStyles.find(
+            child => getWordAttributes(child)?.type === region
+          );
+          const border = getWordChild(
+            getWordChild(getWordChild(conditionalStyle, sectionName), 'tcBorders'),
+            side
+          ) || getWordChild(
+            getWordChild(getWordChild(conditionalStyle, sectionName), 'tblBorders'),
+            side
+          );
+          if (border) return border;
+        }
+        const baseBorder = getWordChild(
+          getWordChild(getWordChild(style, 'tblPr'), 'tblBorders'),
+          side
+        );
+        if (baseBorder) return baseBorder;
+        currentId = getWordValue(getWordChild(style, 'basedOn'));
+      }
+      return null;
+    }
+
     const documentBody = xmlDocument.getElementsByTagNameNS(wordNamespace, 'body')[0];
     if (!documentBody) {
       throw new Error('El archivo Word no contiene un cuerpo de documento válido.');
@@ -424,6 +456,7 @@ const ClientConverter = {
       return {
         rows,
         gridWidths,
+        styleId: getWordValue(getWordChild(tableProperties, 'tblStyle')) || defaultStyles.table,
         width: getWordAttributes(getWordChild(tableProperties, 'tblW')),
         indentation: getWordAttributes(getWordChild(tableProperties, 'tblInd')),
         alignment: getWordValue(getWordChild(tableProperties, 'jc')) || 'left',
@@ -834,12 +867,12 @@ const ClientConverter = {
       return value === undefined ? 4.5 : Math.max(0, Number(value) / 20);
     }
 
-    function getBorderStyle(cell, side, tableBorders) {
-      const border = getWordChild(cell.borders, side) || getWordChild(tableBorders, side);
+    function getBorderStyle(border) {
       if (!border || ['nil', 'none'].includes(getWordValue(border))) {
         return { width: 0, color: rgb(0, 0, 0) };
       }
-      const colorValue = getWordAttributes(border)?.color;
+      const borderProperties = getWordAttributes(border) || {};
+      const colorValue = borderProperties.color;
       const color = colorValue && /^[0-9a-f]{6}$/i.test(colorValue)
         ? rgb(
           parseInt(colorValue.slice(0, 2), 16) / 255,
@@ -847,7 +880,7 @@ const ClientConverter = {
           parseInt(colorValue.slice(4, 6), 16) / 255
         )
         : rgb(0.55, 0.55, 0.55);
-      const size = Number(getWordValue(getWordChild(border, 'sz'))) / 8;
+      const size = Number(borderProperties.sz) / 8;
       return { width: size > 0 ? Math.max(0.35, size) : 0.6, color };
     }
 
@@ -873,11 +906,13 @@ const ClientConverter = {
         columnWidths = columnWidths.map(width => width * targetWidth / gridWidth);
       }
 
-      for (const row of table.rows) {
+      for (const [rowIndex, row] of table.rows.entries()) {
         const cells = [];
         let column = 0;
         for (const cell of row.cells) {
           const span = Math.max(1, Math.min(cell.span, maxColumns - column));
+          const firstColumn = column;
+          const lastColumn = column + span >= maxColumns;
           const width = columnWidths.slice(column, column + span).reduce((sum, value) => sum + value, 0);
           const left = marginLeft + tableIndent + columnWidths.slice(0, column).reduce((sum, value) => sum + value, 0);
           const paddingLeft = getCellMargin(cell, 'left', table.cellMargins);
@@ -889,6 +924,8 @@ const ClientConverter = {
             ...cell,
             left,
             width,
+            firstColumn,
+            lastColumn,
             paddingLeft,
             paddingRight,
             paddingTop,
@@ -973,8 +1010,30 @@ const ClientConverter = {
             cellY -= paragraphLayout.after;
           }
 
+          const regions = [
+            ...(rowIndex === 0 ? ['firstRow'] : []),
+            ...(cell.firstColumn ? ['firstColumn'] : []),
+            ...(cell.lastColumn ? ['lastColumn'] : []),
+            'wholeTable'
+          ];
           for (const side of ['top', 'bottom', 'left', 'right']) {
-            const border = getBorderStyle(cell, side, table.borders);
+            const isOuterEdge = side === 'top'
+              ? rowIndex === 0
+              : side === 'bottom'
+                ? rowIndex === table.rows.length - 1
+                : side === 'left'
+                  ? cell.firstColumn
+                  : cell.lastColumn;
+            const tableBorderName = isOuterEdge
+              ? side
+              : ['top', 'bottom'].includes(side) ? 'insideH' : 'insideV';
+            const border = getBorderStyle(
+              getWordChild(cell.borders, side) ||
+              getWordChild(table.borders, tableBorderName) ||
+              findTableStyleBorder(table.styleId, regions, 'tcPr', side) ||
+              findTableStyleBorder(table.styleId, regions, 'tcPr', tableBorderName) ||
+              findTableStyleBorder(table.styleId, ['wholeTable'], 'tblPr', tableBorderName)
+            );
             if (border.width === 0) continue;
             const start = side === 'top'
               ? { x: cell.left, y: rowTop }
