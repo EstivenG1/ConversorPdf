@@ -917,6 +917,21 @@ header.app-header {
   margin-bottom: 14px;
 }
 
+.wifi-connection-options {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.wifi-connection-help {
+  margin: 0 0 14px;
+  color: var(--text-secondary);
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
+
 .wifi-url-text {
   font-family: monospace;
   font-size: 1.05rem;

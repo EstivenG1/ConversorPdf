@@ -63,6 +63,9 @@ document.addEventListener('DOMContentLoaded', () => {
   const wifiQrCodeImg = document.getElementById('wifiQrCodeImg');
   const wifiUrlText = document.getElementById('wifiUrlText');
   const btnCopyWifiUrl = document.getElementById('btnCopyWifiUrl');
+  const btnWifiUseOnline = document.getElementById('btnWifiUseOnline');
+  const btnWifiUseLocal = document.getElementById('btnWifiUseLocal');
+  const wifiConnectionHelp = document.getElementById('wifiConnectionHelp');
 
   // Modal Historial
   const historyModal = document.getElementById('historyModal');
@@ -510,16 +513,49 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // ==================== CELULAR / WIFI & GITHUB PAGES ====================
-  btnWifiModal.addEventListener('click', async () => {
-    const isOnlineGitHubPages = window.location.hostname.includes('github.io');
-    let qrUrl;
-    if (!isOnlineGitHubPages) {
+  const githubPagesUrl = 'https://estiveng1.github.io/ConversorPdf/';
+  const isOnlineGitHubPages = window.location.hostname.includes('github.io');
+
+  function renderWifiQr(qrUrl, isOnline) {
+    wifiUrlText.textContent = qrUrl;
+
+    const qrTarget = document.querySelector('.qr-frame');
+    qrTarget.innerHTML = '';
+    new QRCode(qrTarget, {
+      text: qrUrl,
+      width: 220,
+      height: 220,
+      colorDark: '#004D2E',
+      colorLight: '#FFFFFF',
+      correctLevel: QRCode.CorrectLevel.M
+    });
+
+    btnWifiUseOnline.classList.toggle('btn-primary', isOnline);
+    btnWifiUseOnline.classList.toggle('btn-surface', !isOnline);
+    btnWifiUseLocal.classList.toggle('btn-primary', !isOnline);
+    btnWifiUseLocal.classList.toggle('btn-surface', isOnline);
+    btnWifiUseOnline.setAttribute('aria-pressed', String(isOnline));
+    btnWifiUseLocal.setAttribute('aria-pressed', String(!isOnline));
+    wifiConnectionHelp.textContent = isOnline
+      ? 'La versión online procesa los archivos en el navegador del celular. Requiere internet y no necesita que el PC esté encendido.'
+      : 'Abre esta copia desde el PC; las conversiones se ejecutan en el navegador del celular. Requiere la misma WiFi y que el firewall permita Node.js.';
+  }
+
+  btnWifiModal.addEventListener('click', () => {
+    const useOnline = () => {
+      renderWifiQr(isOnlineGitHubPages ? window.location.href : githubPagesUrl, true);
+    };
+
+    btnWifiUseOnline.onclick = useOnline;
+    btnWifiUseLocal.style.display = isOnlineGitHubPages ? 'none' : '';
+    btnWifiUseLocal.onclick = async () => {
       try {
         const res = await fetch('/api/network-info');
         const data = await res.json();
         if (!res.ok) {
           throw new Error(data.error || 'No se pudo detectar la dirección de red.');
         }
+
         const networkUrl = new URL(data.networkUrl);
         const hostname = networkUrl.hostname.toLowerCase();
         if (
@@ -532,30 +568,15 @@ document.addEventListener('DOMContentLoaded', () => {
         ) {
           throw new Error('El servidor devolvió una dirección que no es accesible desde el celular.');
         }
-        qrUrl = networkUrl.href;
+
+        renderWifiQr(networkUrl.href, false);
       } catch (error) {
         console.error('No se pudo generar un enlace de red para el celular.', error);
         showToast(error.message || 'No se pudo detectar la dirección de red del equipo.', 'error');
-        return;
       }
-    } else {
-      qrUrl = window.location.href;
-    }
+    };
 
-    wifiUrlText.textContent = qrUrl;
-
-    // Renderizar QR Code dinámico
-    const qrTarget = document.querySelector('.qr-frame');
-    qrTarget.innerHTML = '';
-    new QRCode(qrTarget, {
-      text: qrUrl,
-      width: 220,
-      height: 220,
-      colorDark: '#004D2E',
-      colorLight: '#FFFFFF',
-      correctLevel: QRCode.CorrectLevel.M
-    });
-
+    useOnline();
     wifiModal.classList.add('active');
     if (window.lucide) lucide.createIcons();
   });

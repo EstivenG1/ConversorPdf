@@ -477,7 +477,7 @@
       <div class="modal-body">
         <div class="wifi-card">
           <div class="qr-frame">
-            <img id="wifiQrCodeImg" src="" alt="Código QR WiFi">
+            <img id="wifiQrCodeImg" src="" alt="Código QR de acceso a ConversorG">
           </div>
           <div class="wifi-url-box">
             <span class="wifi-url-text" id="wifiUrlText">Cargando enlace...</span>
@@ -485,9 +485,19 @@
               <i data-lucide="copy"></i> Copiar
             </button>
           </div>
+          <div class="wifi-connection-options">
+            <button class="btn btn-primary" id="btnWifiUseOnline" type="button" aria-pressed="true">
+              Usar versión online
+            </button>
+            <button class="btn btn-surface" id="btnWifiUseLocal" type="button" aria-pressed="false" style="display: none;">
+              Usar red local del PC
+            </button>
+          </div>
+          <p id="wifiConnectionHelp" class="wifi-connection-help">
+            La versión online procesa los archivos en el navegador del celular. Requiere internet y no necesita que el PC esté encendido.
+          </p>
           <ol class="wifi-steps">
-            <li>Conecta tu celular a la <strong>misma red WiFi</strong> que esta PC.</li>
-            <li>Abre la <strong>cámara de tu celular</strong> o un lector QR y escanea el código superior.</li>
+            <li>Escanea el código con la <strong>cámara de tu celular</strong> o un lector QR.</li>
             <li>En Android, toca los 3 puntos de Chrome y selecciona <strong>"Agregar a la pantalla principal"</strong> para instalarlo como App nativa.</li>
           </ol>
         </div>

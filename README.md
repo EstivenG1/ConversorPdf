@@ -31,18 +31,13 @@ Para la máxima comodidad en entornos Windows, la aplicación incluye un archivo
 
 ---
 
-## 📱 Conexión Móvil en Celulares Android (Red WiFi Local)
+## 📱 Conexión Móvil en Celulares Android
 
-La app permite procesar archivos desde el móvil usando el poder de procesamiento de tu PC mediante WiFi:
+El botón **"Celular WiFi"** ofrece dos opciones de QR:
 
-1. Conecta tu celular a la **misma red WiFi** que tu computadora.
-2. Inicia la aplicación en tu PC mediante **`ConversorG.exe`** o **`ConversorG.bat`**.
-3. En la barra superior de la app, pulsa el botón **"Celular WiFi"** (o mira la consola de `ConversorG.bat`).
-4. Se desplegará un **código QR** junto con la dirección local (por ejemplo: `http://192.168.1.40:3000`).
-5. Abre la cámara de tu celular Android o cualquier lector de códigos QR y escanea el código en pantalla.
-6. La aplicación cargará al instante con su interfaz responsive adaptada a pantallas táctiles.
-7. **Instalación como App Nativa (PWA):** En Google Chrome para Android, abre el menú de tres puntos (`⋮`) y presiona **"Agregar a la pantalla principal"** o **"Instalar aplicación"**. ConversorG se instalará con su propio icono en el cajón de aplicaciones de tu celular.
-8. El enlace del QR debe usar la dirección Wi-Fi/LAN del PC (por ejemplo, `http://192.168.1.40:3000`), nunca `localhost` ni `127.0.0.1`. Si el celular no conecta, comprueba que ambos dispositivos estén en la misma red y permite Node.js en redes privadas cuando Windows Firewall lo solicite.
+1. **Versión online (recomendada):** El QR abre GitHub Pages por HTTPS. Requiere internet en el celular, pero no depende de la red local, de que el PC esté encendido ni de la configuración del firewall. Las conversiones se ejecutan en el navegador del celular.
+2. **Red local del PC:** Selecciona **"Usar red local del PC"** para abrir la copia instalada en el PC. Las conversiones también se ejecutan en el navegador del celular. Requiere que celular y PC estén en la misma Wi-Fi, que la red permita comunicación entre dispositivos y que Windows Firewall permita Node.js en redes privadas. Este enlace debe usar una IP como `http://192.168.1.40:3000`, nunca `localhost` ni `127.0.0.1`.
+3. Escanea el QR con la cámara del celular. Para instalar la versión online, abre el menú de Chrome (`⋮`) y elige **"Agregar a la pantalla principal"**.
 
 ---
 
