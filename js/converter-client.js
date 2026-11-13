@@ -339,8 +339,7 @@ const ClientConverter = {
       throw new Error('El archivo Word no contiene un cuerpo de documento válido.');
     }
 
-    const paragraphNodes = Array.from(documentBody.getElementsByTagNameNS(wordNamespace, 'p'));
-    const parsedParagraphs = paragraphNodes.map(paragraph => {
+    function parseWordParagraph(paragraph) {
       const paragraphProperties = getWordChild(paragraph, 'pPr');
       const paragraphStyleId = getWordValue(getWordChild(paragraphProperties, 'pStyle'));
       const paragraphProperty = name =>
@@ -387,16 +386,72 @@ const ClientConverter = {
         pageBreakBefore: pageBreakBeforeProperty !== null &&
           !['0', 'false', 'off'].includes((getWordValue(pageBreakBeforeProperty) || '1').toLowerCase())
       };
-    });
+    }
 
-    if (!parsedParagraphs.some(paragraph => paragraph.fragments.some(fragment => fragment.text.trim()))) {
-      parsedParagraphs.push({
-        fragments: [{ text: 'Documento Word procesado.', properties: null }],
-        paragraphStyleId: null,
-        alignment: 'left',
-        spacing: {},
-        indentation: {},
-        pageBreakBefore: false
+    function parseWordTable(tableNode) {
+      const tableProperties = getWordChild(tableNode, 'tblPr');
+      const tableGrid = getWordChild(tableNode, 'tblGrid');
+      const gridWidths = Array.from(tableGrid?.children || [])
+        .filter(column => column.namespaceURI === wordNamespace && column.localName === 'gridCol')
+        .map(column => Number(getWordAttributes(column)?.w) || 0);
+      const rows = Array.from(tableNode.children || [])
+        .filter(row => row.namespaceURI === wordNamespace && row.localName === 'tr')
+        .map(row => {
+          const rowProperties = getWordChild(row, 'trPr');
+          return {
+            cantSplit: getWordChild(rowProperties, 'cantSplit') !== null,
+            cells: Array.from(row.children || [])
+              .filter(cell => cell.namespaceURI === wordNamespace && cell.localName === 'tc')
+              .map(cell => {
+                const cellProperties = getWordChild(cell, 'tcPr');
+                const span = Number(getWordValue(getWordChild(cellProperties, 'gridSpan'))) || 1;
+                const verticalMerge = getWordChild(cellProperties, 'vMerge');
+                const mergeValue = getWordValue(verticalMerge);
+                return {
+                  paragraphs: Array.from(cell.children || [])
+                    .filter(child => child.namespaceURI === wordNamespace && child.localName === 'p')
+                    .map(parseWordParagraph),
+                  span,
+                  verticalMerge: verticalMerge ? (mergeValue === 'restart' ? 'restart' : 'continue') : null,
+                  verticalAlignment: getWordValue(getWordChild(cellProperties, 'vAlign')) || 'top',
+                  shading: getWordAttributes(getWordChild(cellProperties, 'shd')),
+                  borders: getWordChild(cellProperties, 'tcBorders'),
+                  margins: getWordChild(cellProperties, 'tcMar')
+                };
+              })
+          };
+        });
+      return {
+        rows,
+        gridWidths,
+        width: getWordAttributes(getWordChild(tableProperties, 'tblW')),
+        indentation: getWordAttributes(getWordChild(tableProperties, 'tblInd')),
+        alignment: getWordValue(getWordChild(tableProperties, 'jc')) || 'left',
+        borders: getWordChild(tableProperties, 'tblBorders'),
+        cellMargins: getWordChild(tableProperties, 'tblCellMar')
+      };
+    }
+
+    const documentBlocks = Array.from(documentBody.children || [])
+      .filter(child => child.namespaceURI === wordNamespace && ['p', 'tbl'].includes(child.localName))
+      .map(child => child.localName === 'tbl'
+        ? { type: 'table', table: parseWordTable(child) }
+        : { type: 'paragraph', paragraph: parseWordParagraph(child) });
+    const parsedParagraphs = documentBlocks
+      .filter(block => block.type === 'paragraph')
+      .map(block => block.paragraph);
+
+    if (documentBlocks.length === 0) {
+      documentBlocks.push({
+        type: 'paragraph',
+        paragraph: {
+          fragments: [{ text: 'Documento Word procesado.', properties: null }],
+          paragraphStyleId: null,
+          alignment: 'left',
+          spacing: {},
+          indentation: {},
+          pageBreakBefore: false
+        }
       });
     }
 
@@ -727,8 +782,228 @@ const ClientConverter = {
       currentY -= after;
     }
 
-    for (const paragraph of parsedParagraphs) {
-      await renderParagraph(paragraph);
+    async function layoutTableCell(cell, paragraphMaxWidth) {
+      const paragraphLayouts = [];
+      let totalHeight = 0;
+      for (const paragraph of cell.paragraphs) {
+        const leftIndent = Number(paragraph.indentation.left) / 20 || 0;
+        const rightIndent = Number(paragraph.indentation.right) / 20 || 0;
+        const firstLineIndent = Number(paragraph.indentation.firstLine) / 20 ||
+          (paragraph.indentation.hanging ? -(Number(paragraph.indentation.hanging) / 20) : 0);
+        const availableWidth = Math.max(12, paragraphMaxWidth - leftIndent - rightIndent);
+        const maxLineWidth = Math.max(12, availableWidth - Math.max(0, firstLineIndent));
+        const layout = { lines: [], currentLine: [], currentWidth: 0 };
+        for (const fragment of paragraph.fragments) {
+          if (fragment.pageBreak) {
+            layout.lines.push({ pageBreak: true });
+            continue;
+          }
+          const style = await getRunStyle(fragment, paragraph.paragraphStyleId);
+          appendTextToLayout(makeWinAnsiSafe(fragment.text, style.font), style, maxLineWidth, layout);
+        }
+        if (layout.currentLine.length || layout.lines.length === 0) {
+          layout.lines.push({ fragments: layout.currentLine, width: layout.currentWidth });
+        }
+        const spacing = paragraph.spacing;
+        const lineValue = Number(spacing.line) || 0;
+        const lineRule = spacing.lineRule || 'auto';
+        const before = Number(spacing.before) / 20 || 0;
+        const after = Number(spacing.after) / 20 || 0;
+        const lines = layout.lines.map(line => {
+          if (line.pageBreak) return line;
+          const fontSize = line.fragments.reduce((max, fragment) => Math.max(max, fragment.style.fontSize), defaultFontSize);
+          const lineHeight = !lineValue
+            ? fontSize * 1.2
+            : lineRule === 'auto'
+              ? (lineValue / 240) * fontSize
+              : lineRule === 'atLeast'
+                ? Math.max(fontSize * 1.2, lineValue / 20)
+                : lineValue / 20;
+          return { ...line, height: lineHeight };
+        });
+        totalHeight += before + after + lines.reduce((height, line) => height + (line.height || 0), 0);
+        paragraphLayouts.push({ paragraph, lines, before, after, leftIndent, firstLineIndent });
+      }
+      return { paragraphLayouts, height: totalHeight };
+    }
+
+    function getCellMargin(cell, side, defaultMargins) {
+      const cellValue = getWordAttributes(getWordChild(cell.margins, side));
+      const tableValue = getWordAttributes(getWordChild(defaultMargins, side));
+      const value = cellValue?.w ?? tableValue?.w;
+      return value === undefined ? 4.5 : Math.max(0, Number(value) / 20);
+    }
+
+    function getBorderStyle(cell, side, tableBorders) {
+      const border = getWordChild(cell.borders, side) || getWordChild(tableBorders, side);
+      if (!border || ['nil', 'none'].includes(getWordValue(border))) {
+        return { width: 0, color: rgb(0, 0, 0) };
+      }
+      const colorValue = getWordAttributes(border)?.color;
+      const color = colorValue && /^[0-9a-f]{6}$/i.test(colorValue)
+        ? rgb(
+          parseInt(colorValue.slice(0, 2), 16) / 255,
+          parseInt(colorValue.slice(2, 4), 16) / 255,
+          parseInt(colorValue.slice(4, 6), 16) / 255
+        )
+        : rgb(0.55, 0.55, 0.55);
+      const size = Number(getWordValue(getWordChild(border, 'sz'))) / 8;
+      return { width: size > 0 ? Math.max(0.35, size) : 0.6, color };
+    }
+
+    async function renderTable(table) {
+      const tableIndent = Number(table.indentation?.w) / 20 || 0;
+      const usableWidth = Math.max(48, pageWidth - marginLeft - marginRight - tableIndent);
+      const maxColumns = Math.max(
+        table.gridWidths.length,
+        ...table.rows.map(row => row.cells.reduce((count, cell) => count + cell.span, 0)),
+        1
+      );
+      let columnWidths = table.gridWidths.slice(0, maxColumns).map(width => width / 20);
+      if (columnWidths.length !== maxColumns || columnWidths.some(width => width <= 0)) {
+        columnWidths = Array(maxColumns).fill(usableWidth / maxColumns);
+      } else {
+        const gridWidth = columnWidths.reduce((sum, width) => sum + width, 0);
+        const tableWidth = table.width?.type === 'pct'
+          ? usableWidth * (Number(table.width.w) / 5000)
+          : table.width?.w && table.width.type !== 'auto'
+            ? Number(table.width.w) / 20
+            : gridWidth;
+        const targetWidth = Math.min(usableWidth, tableWidth);
+        columnWidths = columnWidths.map(width => width * targetWidth / gridWidth);
+      }
+
+      for (const row of table.rows) {
+        const cells = [];
+        let column = 0;
+        for (const cell of row.cells) {
+          const span = Math.max(1, Math.min(cell.span, maxColumns - column));
+          const width = columnWidths.slice(column, column + span).reduce((sum, value) => sum + value, 0);
+          const left = marginLeft + tableIndent + columnWidths.slice(0, column).reduce((sum, value) => sum + value, 0);
+          const paddingLeft = getCellMargin(cell, 'left', table.cellMargins);
+          const paddingRight = getCellMargin(cell, 'right', table.cellMargins);
+          const paddingTop = getCellMargin(cell, 'top', table.cellMargins);
+          const paddingBottom = getCellMargin(cell, 'bottom', table.cellMargins);
+          const layout = await layoutTableCell(cell, Math.max(12, width - paddingLeft - paddingRight));
+          cells.push({
+            ...cell,
+            left,
+            width,
+            paddingLeft,
+            paddingRight,
+            paddingTop,
+            paddingBottom,
+            layout
+          });
+          column += span;
+        }
+
+        const rowHeight = Math.max(
+          18,
+          ...cells.map(cell => cell.layout.height + cell.paddingTop + cell.paddingBottom)
+        );
+        if (!currentPage) await ensurePage();
+        if (currentY - rowHeight < contentBottom && currentY < contentTop) startNewPage();
+        const rowTop = currentY;
+        const rowBottom = rowTop - rowHeight;
+
+        for (const cell of cells) {
+          const shading = cell.shading?.fill;
+          if (shading && !['auto', 'clear'].includes(shading.toLowerCase()) && /^[0-9a-f]{6}$/i.test(shading)) {
+            currentPage.drawRectangle({
+              x: cell.left,
+              y: rowBottom,
+              width: cell.width,
+              height: rowHeight,
+              color: rgb(
+                parseInt(shading.slice(0, 2), 16) / 255,
+                parseInt(shading.slice(2, 4), 16) / 255,
+                parseInt(shading.slice(4, 6), 16) / 255
+              )
+            });
+          }
+
+          let cellY = rowTop - cell.paddingTop;
+          if (cell.verticalAlignment === 'center') {
+            cellY -= Math.max(0, rowHeight - cell.layout.height - cell.paddingTop - cell.paddingBottom) / 2;
+          } else if (cell.verticalAlignment === 'bottom') {
+            cellY -= Math.max(0, rowHeight - cell.layout.height - cell.paddingTop - cell.paddingBottom);
+          }
+
+          for (const paragraphLayout of cell.layout.paragraphLayouts) {
+            const paragraph = paragraphLayout.paragraph;
+            cellY -= paragraphLayout.before;
+            let firstLine = true;
+            for (const line of paragraphLayout.lines) {
+              if (line.pageBreak) continue;
+              const fragments = line.fragments;
+              const paragraphOffset = paragraphLayout.leftIndent +
+                (firstLine ? paragraphLayout.firstLineIndent : 0);
+              let x = cell.left + cell.paddingLeft + paragraphOffset;
+              const alignment = paragraph.alignment;
+              const lineWidth = line.width || 0;
+              if (alignment === 'center') {
+                x += Math.max(0, (cell.width - cell.paddingLeft - cell.paddingRight - paragraphOffset - lineWidth) / 2);
+              } else if (alignment === 'right' || alignment === 'end') {
+                x += Math.max(0, cell.width - cell.paddingLeft - cell.paddingRight - paragraphOffset - lineWidth);
+              }
+
+              cellY -= line.height;
+              for (const fragment of fragments) {
+                const fragmentWidth = fragment.style.font.widthOfTextAtSize(fragment.text, fragment.style.fontSize);
+                currentPage.drawText(fragment.text, {
+                  x,
+                  y: cellY,
+                  size: fragment.style.fontSize,
+                  font: fragment.style.font,
+                  color: fragment.style.color
+                });
+                if (fragment.style.underline) {
+                  currentPage.drawLine({
+                    start: { x, y: cellY - 1 },
+                    end: { x: x + fragmentWidth, y: cellY - 1 },
+                    thickness: 0.5,
+                    color: fragment.style.color
+                  });
+                }
+                x += fragmentWidth;
+              }
+              firstLine = false;
+            }
+            cellY -= paragraphLayout.after;
+          }
+
+          for (const side of ['top', 'bottom', 'left', 'right']) {
+            const border = getBorderStyle(cell, side, table.borders);
+            if (border.width === 0) continue;
+            const start = side === 'top'
+              ? { x: cell.left, y: rowTop }
+              : side === 'bottom'
+                ? { x: cell.left, y: rowBottom }
+                : side === 'left'
+                  ? { x: cell.left, y: rowBottom }
+                  : { x: cell.left + cell.width, y: rowBottom };
+            const end = side === 'top'
+              ? { x: cell.left + cell.width, y: rowTop }
+              : side === 'bottom'
+                ? { x: cell.left + cell.width, y: rowBottom }
+                : side === 'left'
+                  ? { x: cell.left, y: rowTop }
+                  : { x: cell.left + cell.width, y: rowTop };
+            currentPage.drawLine({ start, end, thickness: border.width, color: border.color });
+          }
+        }
+        currentY = rowBottom;
+      }
+      currentY -= 6;
+    }
+
+    for (const block of documentBlocks) {
+      if (block.type === 'table') {
+        await renderTable(block.table);
+      } else {
+        await renderParagraph(block.paragraph);
+      }
     }
 
     for (const [index, page] of pdfDoc.getPages().entries()) {

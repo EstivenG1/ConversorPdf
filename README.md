@@ -83,7 +83,7 @@ Diseñada pensando en el confort visual, la calidez y el lujo sobrio:
 
 ### 📄 Conversores PDF y Microsoft Office
 1. **Convertir PDF a Word (.docx):** Extrae texto, párrafos y estructura de documentos PDF generando un archivo DOCX editable.
-2. **Convertir Word (.docx) a PDF:** Conserva formato de párrafo y texto, tamaño y márgenes de página, alineación, sangría, espaciado, negrita y cursiva. Tablas, imágenes y maquetaciones avanzadas pueden variar. Incluye numeración y enlace de ConversorG discreto en cada página.
+2. **Convertir Word (.docx) a PDF:** Conserva formato de párrafo y texto, tamaño y márgenes de página, alineación, sangría, espaciado, negrita y cursiva. Renderiza tablas con columnas, alineación, sombreado y bordes explícitos; estilos heredados, celdas combinadas verticalmente, imágenes y maquetaciones avanzadas pueden variar. Incluye numeración y enlace de ConversorG discreto en cada página.
 3. **Unir PDF (Merge):** Fusiona dos o más documentos PDF en un solo archivo en el orden deseado.
 4. **Dividir PDF (Split):** Extrae rangos específicos (ejemplo: `1-3, 5, 8`) o divide cada página en archivos individuales dentro de un ZIP.
 5. **PDF a Excel (.xlsx):** Detecta tablas, columnas y datos numéricos en el PDF y genera una hoja de cálculo Excel lista para trabajar.
