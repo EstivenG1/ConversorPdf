@@ -24,15 +24,29 @@ const CONVERTED_DIR = path.join(__dirname, 'converted');
  */
 function getLocalNetworkIp() {
   const interfaces = os.networkInterfaces();
-  for (const name of Object.keys(interfaces)) {
-    for (const net of interfaces[name]) {
-      // Priorizar IPv4 y que no sea bucle local (127.0.0.1)
-      if (net.family === 'IPv4' && !net.internal) {
-        return net.address;
-      }
-    }
+  const candidates = Object.entries(interfaces).flatMap(([name, addresses]) =>
+    (addresses || [])
+      .filter(net => net.family === 'IPv4' && !net.internal)
+      .map(net => ({ name, address: net.address }))
+  );
+  const isPrivateAddress = address => {
+    const octets = address.split('.').map(Number);
+    return octets[0] === 10 ||
+      (octets[0] === 172 && octets[1] >= 16 && octets[1] <= 31) ||
+      (octets[0] === 192 && octets[1] === 168);
+  };
+  const wifiInterface = candidates.find(candidate =>
+    /wi[- ]?fi|wireless|wlan|802\.11/i.test(candidate.name) &&
+    isPrivateAddress(candidate.address)
+  );
+  const privateInterface = candidates.find(candidate => isPrivateAddress(candidate.address));
+  const selectedInterface = wifiInterface || privateInterface;
+
+  if (!selectedInterface) {
+    throw new Error('No se encontró una dirección IPv4 privada. Conecta el equipo a una red Wi-Fi o LAN.');
   }
-  return 'localhost';
+
+  return selectedInterface.address;
 }
 
 /**
@@ -78,7 +92,16 @@ const server = http.createServer(async (req, res) => {
 
   // 1. Información de Red y Código QR
   if (pathname === '/api/network-info' && req.method === 'GET') {
-    const ip = getLocalNetworkIp();
+    let ip;
+    try {
+      ip = getLocalNetworkIp();
+    } catch (error) {
+      console.error('No se pudo obtener la dirección de red para el código QR:', error);
+      res.writeHead(503, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: error.message }));
+      return;
+    }
+
     const networkUrl = `http://${ip}:${PORT}`;
     try {
       const qrCodeDataUrl = await qrcode.toDataURL(networkUrl, {
@@ -383,9 +406,13 @@ const server = http.createServer(async (req, res) => {
 
 // Iniciar servidor
 server.listen(PORT, '0.0.0.0', async () => {
-  const localIp = getLocalNetworkIp();
-  const networkUrl = `http://${localIp}:${PORT}`;
   const localUrl = `http://localhost:${PORT}`;
+  let networkUrl;
+  try {
+    networkUrl = `http://${getLocalNetworkIp()}:${PORT}`;
+  } catch (error) {
+    console.error('No se pudo obtener la dirección Wi-Fi para conectar un celular:', error);
+  }
 
   console.log('====================================================');
   console.log('           📄 CONVERSORG - CONVERSOR DE PDF         ');
@@ -393,14 +420,19 @@ server.listen(PORT, '0.0.0.0', async () => {
   console.log('       Contacto: estivenabreo@gmail.com             ');
   console.log('====================================================');
   console.log(`💻 En tu PC:          ${localUrl}`);
-  console.log(`📱 En Celular WiFi:   ${networkUrl}`);
-  console.log('----------------------------------------------------');
-  console.log('📲 Escanea este código QR con la cámara de tu celular:');
-
-  try {
-    const qrTerminal = await qrcode.toString(networkUrl, { type: 'terminal', small: true });
-    console.log(qrTerminal);
-  } catch (_) {}
+  if (networkUrl) {
+    console.log(`📱 En Celular WiFi:   ${networkUrl}`);
+    console.log('----------------------------------------------------');
+    console.log('📲 Escanea este código QR con la cámara de tu celular:');
+    try {
+      const qrTerminal = await qrcode.toString(networkUrl, { type: 'terminal', small: true });
+      console.log(qrTerminal);
+    } catch (error) {
+      console.error('No se pudo generar el código QR para la consola:', error);
+    }
+  } else {
+    console.log('📱 Conecta este equipo a una red Wi-Fi o LAN para obtener el enlace móvil.');
+  }
 
   console.log('====================================================');
   console.log('Servidor activo y listo para procesar documentos localmente.');

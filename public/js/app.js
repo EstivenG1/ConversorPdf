@@ -512,18 +512,34 @@ document.addEventListener('DOMContentLoaded', () => {
   // ==================== CELULAR / WIFI & GITHUB PAGES ====================
   btnWifiModal.addEventListener('click', async () => {
     const isOnlineGitHubPages = window.location.hostname.includes('github.io');
-    const targetUrl = isOnlineGitHubPages ? window.location.href : (window.location.origin || 'http://localhost:3000');
-
-    // Intentar consultar al servidor local si estamos en localhost
-    let qrUrl = targetUrl;
+    let qrUrl;
     if (!isOnlineGitHubPages) {
       try {
         const res = await fetch('/api/network-info');
-        if (res.ok) {
-          const data = await res.json();
-          qrUrl = data.networkUrl;
+        const data = await res.json();
+        if (!res.ok) {
+          throw new Error(data.error || 'No se pudo detectar la dirección de red.');
         }
-      } catch (_) {}
+        const networkUrl = new URL(data.networkUrl);
+        const hostname = networkUrl.hostname.toLowerCase();
+        if (
+          !['http:', 'https:'].includes(networkUrl.protocol) ||
+          hostname === 'localhost' ||
+          hostname === '[::1]' ||
+          hostname === '0.0.0.0' ||
+          hostname.startsWith('127.') ||
+          hostname.startsWith('169.254.')
+        ) {
+          throw new Error('El servidor devolvió una dirección que no es accesible desde el celular.');
+        }
+        qrUrl = networkUrl.href;
+      } catch (error) {
+        console.error('No se pudo generar un enlace de red para el celular.', error);
+        showToast(error.message || 'No se pudo detectar la dirección de red del equipo.', 'error');
+        return;
+      }
+    } else {
+      qrUrl = window.location.href;
     }
 
     wifiUrlText.textContent = qrUrl;

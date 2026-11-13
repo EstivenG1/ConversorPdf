@@ -42,6 +42,7 @@ La app permite procesar archivos desde el móvil usando el poder de procesamient
 5. Abre la cámara de tu celular Android o cualquier lector de códigos QR y escanea el código en pantalla.
 6. La aplicación cargará al instante con su interfaz responsive adaptada a pantallas táctiles.
 7. **Instalación como App Nativa (PWA):** En Google Chrome para Android, abre el menú de tres puntos (`⋮`) y presiona **"Agregar a la pantalla principal"** o **"Instalar aplicación"**. ConversorG se instalará con su propio icono en el cajón de aplicaciones de tu celular.
+8. El enlace del QR debe usar la dirección Wi-Fi/LAN del PC (por ejemplo, `http://192.168.1.40:3000`), nunca `localhost` ni `127.0.0.1`. Si el celular no conecta, comprueba que ambos dispositivos estén en la misma red y permite Node.js en redes privadas cuando Windows Firewall lo solicite.
 
 ---
 
