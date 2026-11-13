@@ -32,9 +32,14 @@ document.addEventListener('DOMContentLoaded', () => {
   const successFileName = document.getElementById('successFileName');
   const statOriginalSize = document.getElementById('statOriginalSize');
   const statResultSize = document.getElementById('statResultSize');
+  const successResultNote = document.getElementById('successResultNote');
   const btnDownloadResult = document.getElementById('btnDownloadResult');
-  const btnPreviewResult = document.getElementById('btnPreviewResult');
   const btnConvertAnother = document.getElementById('btnConvertAnother');
+  const conversionErrorPanel = document.getElementById('conversionErrorPanel');
+  const conversionErrorSummary = document.getElementById('conversionErrorSummary');
+  const conversionErrorAdvice = document.getElementById('conversionErrorAdvice');
+  const conversionErrorDetails = document.getElementById('conversionErrorDetails');
+  const btnCopyConversionError = document.getElementById('btnCopyConversionError');
   const modalFooter = document.getElementById('modalFooter');
   const btnCancelAction = document.getElementById('btnCancelAction');
   const btnCloseModal = document.getElementById('btnCloseModal');
@@ -46,26 +51,19 @@ document.addEventListener('DOMContentLoaded', () => {
   const optRotateGroup = document.getElementById('optRotateGroup');
   const optImagesGroup = document.getElementById('optImagesGroup');
 
-  // Modal de Previsualización
-  const previewModal = document.getElementById('previewModal');
-  const previewTitle = document.getElementById('previewTitle');
-  const previewIframe = document.getElementById('previewIframe');
-  const previewTextBox = document.getElementById('previewTextBox');
-  const previewImg = document.getElementById('previewImg');
-  const previewDownloadDirect = document.getElementById('previewDownloadDirect');
-  const btnClosePreview = document.getElementById('btnClosePreview');
-
   // Modal WiFi
   const wifiModal = document.getElementById('wifiModal');
   const btnWifiModal = document.getElementById('btnWifiModal');
   const btnCloseWifi = document.getElementById('btnCloseWifi');
-  const wifiQrCodeContainer = document.getElementById('wifiQrCodeContainer') || document.querySelector('.qr-frame');
-  const wifiQrCodeImg = document.getElementById('wifiQrCodeImg');
   const wifiUrlText = document.getElementById('wifiUrlText');
   const btnCopyWifiUrl = document.getElementById('btnCopyWifiUrl');
   const btnWifiUseOnline = document.getElementById('btnWifiUseOnline');
   const btnWifiUseLocal = document.getElementById('btnWifiUseLocal');
   const wifiConnectionHelp = document.getElementById('wifiConnectionHelp');
+  const wifiErrorPanel = document.getElementById('wifiErrorPanel');
+  const wifiErrorSummary = document.getElementById('wifiErrorSummary');
+  const wifiErrorDetails = document.getElementById('wifiErrorDetails');
+  const btnCopyWifiError = document.getElementById('btnCopyWifiError');
 
   // Modal Historial
   const historyModal = document.getElementById('historyModal');
@@ -78,7 +76,6 @@ document.addEventListener('DOMContentLoaded', () => {
   // Estado Actual
   let currentTool = null;
   let currentFiles = []; // Array de { file, buffer, name, size, type }
-  let lastResult = null; // { blob, blobUrl, fileName, originalSize, resultSize, text }
   const activeBlobUrls = new Map();
 
   // Registrar Service Worker para PWA
@@ -141,7 +138,6 @@ document.addEventListener('DOMContentLoaded', () => {
   function openActionModal({ tool, title, accept, multiple }) {
     currentTool = tool;
     currentFiles = [];
-    lastResult = null;
 
     modalTitle.querySelector('span').textContent = title;
     fileInput.accept = accept;
@@ -181,7 +177,13 @@ document.addEventListener('DOMContentLoaded', () => {
     selectedFilesList.innerHTML = '';
     selectedFilesList.style.display = 'flex';
     progressContainer.classList.remove('active');
+    conversionErrorPanel.hidden = true;
+    conversionErrorSummary.textContent = '';
+    conversionErrorAdvice.textContent = '';
+    conversionErrorDetails.textContent = '';
     successScreen.classList.remove('active');
+    successResultNote.hidden = true;
+    successResultNote.textContent = '';
     modalFooter.style.display = 'flex';
     btnStartConvert.disabled = true;
     progressBarFill.style.width = '0%';
@@ -229,14 +231,18 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!fileInput.multiple && currentFiles.length >= 1) {
         currentFiles = [];
       }
-      const buffer = await f.arrayBuffer();
-      currentFiles.push({
-        file: f,
-        name: f.name,
-        size: f.size,
-        type: f.type,
-        buffer: buffer
-      });
+      try {
+        const buffer = await f.arrayBuffer();
+        currentFiles.push({
+          file: f,
+          name: f.name,
+          size: f.size,
+          type: f.type,
+          buffer: buffer
+        });
+      } catch (error) {
+        showConversionError(error, `lectura del archivo "${f.name}"`, f);
+      }
     }
 
     renderSelectedFiles();
@@ -280,6 +286,145 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  function validateConversionInputs(tool, files) {
+    if (files.length === 0) {
+      throw new Error('Selecciona al menos un archivo para iniciar la conversión.');
+    }
+    if (files.some(item => item.size === 0)) {
+      const emptyFile = files.find(item => item.size === 0);
+      throw new Error(`El archivo "${emptyFile.name}" está vacío. Elige un archivo con contenido.`);
+    }
+    if (tool === 'merge-pdf' && files.length < 2) {
+      throw new Error('Para unir PDF debes seleccionar al menos dos archivos PDF.');
+    }
+
+    const acceptedExtensions = fileInput.accept
+      .split(',')
+      .filter(value => value.startsWith('.'))
+      .map(value => value.toLowerCase());
+    for (const item of files) {
+      const extension = item.name.includes('.') ? `.${item.name.split('.').pop().toLowerCase()}` : '';
+      if (acceptedExtensions.length > 0 && !acceptedExtensions.includes(extension)) {
+        throw new Error(`"${item.name}" no tiene un formato permitido para esta función. Formatos aceptados: ${acceptedExtensions.join(', ')}.`);
+      }
+
+      const requiresPdf = [
+        'pdf-to-word', 'merge-pdf', 'split-pdf', 'pdf-to-excel',
+        'pdf-to-pptx', 'pdf-to-jpg', 'watermark-pdf', 'rotate-pdf',
+        'compress-pdf', 'extract-text'
+      ].includes(tool);
+      if (requiresPdf) {
+        const header = new TextDecoder('ascii').decode(item.buffer.slice(0, Math.min(item.buffer.byteLength, 1024)));
+        if (!header.includes('%PDF-')) {
+          throw new Error(`"${item.name}" tiene extensión PDF, pero su contenido no parece ser un PDF válido. Comprueba que sea el archivo correcto y que no esté dañado.`);
+        }
+      }
+    }
+  }
+
+  function getConversionAdvice(error) {
+    const message = (error.message || '').toLowerCase();
+    if (/librerías requeridas|librerías no cargadas|library.*not loaded|failed to load library/.test(message)) {
+      return 'No están disponibles las librerías necesarias. Comprueba que la página y sus archivos JavaScript hayan cargado; recarga la página y vuelve a intentarlo con internet.';
+    }
+    if (/encrypted|encrypt|password|contraseña|clave/.test(message)) {
+      return 'El documento parece estar protegido con contraseña o cifrado. Guarda una copia sin protección e inténtalo de nuevo.';
+    }
+    if (/pdf header|parse.*pdf|invalid pdf|malformed|unexpected end|no parece ser un pdf/.test(message)) {
+      return 'Verifica que el archivo seleccionado sea un PDF válido, que no esté incompleto y que su extensión corresponda al contenido.';
+    }
+    if (/jpeg|jpg|png|webp|image|imagen|canvas|decodificar/.test(message)) {
+      return 'Verifica que cada archivo sea una imagen JPG, PNG o WebP válida. Si fue renombrada manualmente o no abre en el dispositivo, expórtala de nuevo como JPG o PNG.';
+    }
+    if (/memory|memoria|allocation|quota|rangeerror/.test(message)) {
+      return 'El archivo es demasiado grande para la memoria disponible en el navegador. Cierra otras pestañas o prueba con un archivo más pequeño.';
+    }
+    if (/failed to fetch|network|fetch|service worker|load failed/.test(message)) {
+      return 'No se pudo acceder a un recurso de la página. Comprueba internet, recarga la página y verifica que estés usando la versión actual.';
+    }
+    if (/arraybuffer|detached/.test(message)) {
+      return 'El contenido del archivo dejó de estar disponible durante el proceso. Vuelve a seleccionar los archivos e inténtalo otra vez.';
+    }
+    return 'Comprueba que los archivos sean del formato indicado, que se puedan abrir y que haya suficiente memoria disponible. Si continúa, copia el diagnóstico técnico para soporte.';
+  }
+
+  function getFriendlyConversionMessage(error) {
+    const message = (error.message || '').toLowerCase();
+    if (/^(selecciona al menos|para unir pdf|el archivo|".+?" (no tiene|tiene extensión|está vacío|no contiene)|no se pudo leer)/i.test(error.message || '')) {
+      return error.message;
+    }
+    if (/librerías requeridas|librerías no cargadas|library.*not loaded|failed to load library/.test(message)) {
+      return 'Falta una librería necesaria para procesar este archivo.';
+    }
+    if (/encrypted|encrypt|password|contraseña|clave/.test(message)) {
+      return 'El documento está protegido o cifrado y no se pudo abrir.';
+    }
+    if (/pdf header|parse.*pdf|invalid pdf|malformed|unexpected end/.test(message)) {
+      return 'El contenido no se pudo leer como un PDF válido.';
+    }
+    if (/jpeg|jpg|png|webp|image|imagen|canvas|decodificar/.test(message)) {
+      return 'Una de las imágenes no se pudo leer o convertir.';
+    }
+    if (/memory|memoria|allocation|quota|rangeerror/.test(message)) {
+      return 'El navegador no tiene memoria suficiente para procesar estos archivos.';
+    }
+    if (/failed to fetch|network|fetch|service worker|load failed/.test(message)) {
+      return 'No se pudo acceder a un recurso necesario de la página.';
+    }
+    return 'Ocurrió un error inesperado al procesar los archivos.';
+  }
+
+  function buildConversionDiagnostic(error, stage, additionalFile) {
+    const files = currentFiles.map(item =>
+      `${item.name} | ${formatBytes(item.size)} | ${item.type || 'sin tipo MIME'}`
+    );
+    if (additionalFile) {
+      files.push(`${additionalFile.name} | ${formatBytes(additionalFile.size)} | ${additionalFile.type || 'sin tipo MIME'}`);
+    }
+    const details = [
+      'ConversorG - diagnóstico de conversión',
+      `Fecha: ${new Date().toISOString()}`,
+      `Etapa: ${stage}`,
+      `Operación: ${currentTool || 'no identificada'}`,
+      `Página: ${location.origin}${location.pathname}`,
+      `Modo: ${location.hostname.includes('github.io') ? 'GitHub Pages' : 'servidor local'}`,
+      `Conexión a internet: ${navigator.onLine ? 'disponible' : 'sin conexión'}`,
+      `Contexto seguro: ${window.isSecureContext ? 'sí' : 'no'}`,
+      `Archivos:\n${files.length ? files.join('\n') : 'No se seleccionaron archivos.'}`,
+      `Librerías: PDFLib=${typeof PDFLib}, pdfjsLib=${typeof pdfjsLib}, JSZip=${typeof JSZip}, XLSX=${typeof XLSX}, PptxGenJS=${typeof PptxGenJS}`,
+      `Error técnico: ${error.name || 'Error'}: ${error.message || 'Error desconocido'}`,
+      `Pila técnica:\n${error.stack || 'No disponible'}`
+    ];
+    return details.join('\n');
+  }
+
+  function showConversionError(error, stage, additionalFile) {
+    const report = buildConversionDiagnostic(error, stage, additionalFile);
+    const operation = modalTitle.querySelector('span').textContent;
+    conversionErrorSummary.textContent = `No se pudo completar "${operation}" durante la etapa "${stage}". ${getFriendlyConversionMessage(error)}`;
+    conversionErrorAdvice.textContent = getConversionAdvice(error);
+    conversionErrorDetails.textContent = report;
+    conversionErrorPanel.hidden = false;
+    console.error('ConversorG: falló una operación.', { report, error });
+  }
+
+  async function copyDiagnostic(text) {
+    try {
+      if (!navigator.clipboard || typeof navigator.clipboard.writeText !== 'function') {
+        throw new Error('El navegador no permite copiar desde una conexión HTTP local.');
+      }
+      await navigator.clipboard.writeText(text);
+      showToast('Diagnóstico copiado. Puedes enviarlo al desarrollador.', 'success');
+    } catch (error) {
+      console.error('No se pudo copiar el diagnóstico al portapapeles.', error);
+      showToast('No se pudo copiar. Abre los detalles y cópialos manualmente.', 'error');
+    }
+  }
+
+  btnCopyConversionError.addEventListener('click', () => {
+    copyDiagnostic(conversionErrorDetails.textContent);
+  });
+
   // ==================== EJECUTAR CONVERSIÓN EN NAVEGADOR ====================
   btnStartConvert.addEventListener('click', async () => {
     if (!currentTool || currentFiles.length === 0) return;
@@ -302,21 +447,24 @@ document.addEventListener('DOMContentLoaded', () => {
     optionsBox.style.display = 'none';
     modalFooter.style.display = 'none';
     progressContainer.classList.add('active');
+    conversionErrorPanel.hidden = true;
 
     updateProgress(20, 'Cargando documento en el navegador...');
     await delay(180);
 
+    let conversionStage = 'validación de los archivos';
     try {
+      validateConversionInputs(currentTool, currentFiles);
       let resultBlob;
       let outputFileName = '';
       const firstFile = currentFiles[0];
       const baseName = (firstFile.name || 'archivo').replace(/\.[^/.]+$/, '');
       const originalTotalSize = currentFiles.reduce((acc, f) => acc + f.size, 0);
-      let textContent = '';
 
       updateProgress(45, 'Procesando conversión 100% en tu navegador...');
       await delay(150);
 
+      conversionStage = 'conversión';
       switch (currentTool) {
         case 'pdf-to-word': {
           resultBlob = await ClientConverter.pdfToWord(firstFile.buffer, options);
@@ -389,7 +537,6 @@ document.addEventListener('DOMContentLoaded', () => {
         case 'extract-text': {
           const resTxt = await ClientConverter.extractText(firstFile.buffer);
           resultBlob = resTxt.blob;
-          textContent = resTxt.text;
           outputFileName = `${baseName}_texto_ConversorG.txt`;
           break;
         }
@@ -397,22 +544,18 @@ document.addEventListener('DOMContentLoaded', () => {
           throw new Error('Operación no soportada.');
       }
 
-      updateProgress(100, '¡Conversión completada con éxito!');
+        if (!(resultBlob instanceof Blob) || resultBlob.size === 0) {
+          conversionStage = 'validación del archivo generado';
+          throw new Error(`La operación "${currentTool}" no produjo un archivo descargable. Comprueba los archivos de entrada y vuelve a intentarlo.`);
+        }
+
+        conversionStage = 'preparación de la descarga';
+        updateProgress(100, '¡Conversión completada con éxito!');
       await delay(250);
 
       const blobUrl = URL.createObjectURL(resultBlob);
       const resultSize = resultBlob.size;
       const savings = originalTotalSize > resultSize ? Math.round((1 - resultSize / originalTotalSize) * 100) : 0;
-
-      lastResult = {
-        blob: resultBlob,
-        blobUrl: blobUrl,
-        fileName: outputFileName,
-        originalSize: originalTotalSize,
-        resultSize: resultSize,
-        savings: savings,
-        text: textContent
-      };
 
       // Guardar en historial local
       addHistoryRecord({
@@ -421,16 +564,21 @@ document.addEventListener('DOMContentLoaded', () => {
         originalSize: originalTotalSize,
         resultSize: resultSize,
         fileName: outputFileName,
-        blobUrl: blobUrl,
-        blob: resultBlob
+        blobUrl: blobUrl
       });
 
-      showSuccessScreen(lastResult);
+      showSuccessScreen({
+        blobUrl,
+        fileName: outputFileName,
+        originalSize: originalTotalSize,
+        resultSize,
+        savings
+      });
       showToast('Documento procesado con éxito', 'success');
 
     } catch (err) {
-      console.error(err);
-      showToast(err.message || 'Error durante la conversión', 'error');
+      showConversionError(err, conversionStage);
+      showToast('La conversión falló. Revisa el diagnóstico en pantalla.', 'error');
       progressContainer.classList.remove('active');
       dropzoneArea.style.display = 'block';
       selectedFilesList.style.display = 'flex';
@@ -451,6 +599,11 @@ document.addEventListener('DOMContentLoaded', () => {
     successFileName.textContent = result.fileName;
     statOriginalSize.textContent = `Original: ${formatBytes(result.originalSize)}`;
     statResultSize.textContent = `Resultado: ${formatBytes(result.resultSize)} ${result.savings > 0 ? '(-' + result.savings + '%)' : ''}`;
+    const compressionDidNotShrink = currentTool === 'compress-pdf' && result.resultSize >= result.originalSize;
+    successResultNote.hidden = !compressionDidNotShrink;
+    if (compressionDidNotShrink) {
+      successResultNote.textContent = 'El PDF es válido, pero esta optimización no redujo su tamaño. Puede que ya esté optimizado o que sus imágenes ya estén comprimidas; para reducirlo más habría que bajar la calidad o resolución de las imágenes.';
+    }
 
     btnDownloadResult.href = result.blobUrl;
     btnDownloadResult.setAttribute('download', result.fileName);
@@ -458,58 +611,9 @@ document.addEventListener('DOMContentLoaded', () => {
     if (window.lucide) lucide.createIcons();
   }
 
-  btnPreviewResult.addEventListener('click', () => {
-    if (lastResult) {
-      openFilePreview(lastResult.fileName, lastResult.blobUrl, lastResult.text);
-    }
-  });
-
   btnConvertAnother.addEventListener('click', () => {
     resetActionModalState();
     currentFiles = [];
-  });
-
-  // ==================== VISUALIZADOR DE ARCHIVOS ====================
-  function openFilePreview(fileName, blobUrl, rawText = '') {
-    previewTitle.querySelector('span').textContent = fileName;
-    previewDownloadDirect.href = blobUrl;
-    previewDownloadDirect.setAttribute('download', fileName);
-
-    previewIframe.style.display = 'none';
-    previewTextBox.style.display = 'none';
-    previewImg.style.display = 'none';
-
-    const ext = fileName.split('.').pop().toLowerCase();
-
-    if (ext === 'pdf') {
-      previewIframe.src = blobUrl;
-      previewIframe.style.display = 'block';
-    } else if (['jpg', 'jpeg', 'png', 'webp', 'svg'].includes(ext)) {
-      previewImg.src = blobUrl;
-      previewImg.style.display = 'block';
-    } else if (['txt', 'csv', 'json', 'xml'].includes(ext)) {
-      if (rawText) {
-        previewTextBox.textContent = rawText;
-        previewTextBox.style.display = 'block';
-      } else {
-        fetch(blobUrl).then(r => r.text()).then(t => {
-          previewTextBox.textContent = t;
-          previewTextBox.style.display = 'block';
-        });
-      }
-    } else {
-      // Para DOCX / XLSX / PPTX, se muestra visor o descarga directa
-      previewIframe.src = blobUrl;
-      previewIframe.style.display = 'block';
-    }
-
-    previewModal.classList.add('active');
-    if (window.lucide) lucide.createIcons();
-  }
-
-  btnClosePreview.addEventListener('click', () => {
-    previewModal.classList.remove('active');
-    previewIframe.src = '';
   });
 
   // ==================== CELULAR / WIFI & GITHUB PAGES ====================
@@ -543,15 +647,23 @@ document.addEventListener('DOMContentLoaded', () => {
 
   btnWifiModal.addEventListener('click', () => {
     const useOnline = () => {
+      wifiErrorPanel.hidden = true;
       renderWifiQr(isOnlineGitHubPages ? window.location.href : githubPagesUrl, true);
     };
 
     btnWifiUseOnline.onclick = useOnline;
     btnWifiUseLocal.style.display = isOnlineGitHubPages ? 'none' : '';
     btnWifiUseLocal.onclick = async () => {
+      let responseStatus = 'Sin respuesta del servidor local';
       try {
-        const res = await fetch('/api/network-info');
-        const data = await res.json();
+        const res = await fetch('/api/network-info', { cache: 'no-store' });
+        responseStatus = `HTTP ${res.status} ${res.statusText}`.trim();
+        let data;
+        try {
+          data = await res.json();
+        } catch (error) {
+          throw new Error(`El servicio local respondió ${responseStatus}, pero no devolvió información JSON. Comprueba que ConversorG esté actualizado.`);
+        }
         if (!res.ok) {
           throw new Error(data.error || 'No se pudo detectar la dirección de red.');
         }
@@ -569,14 +681,29 @@ document.addEventListener('DOMContentLoaded', () => {
           throw new Error('El servidor devolvió una dirección que no es accesible desde el celular.');
         }
 
+        wifiErrorPanel.hidden = true;
         renderWifiQr(networkUrl.href, false);
       } catch (error) {
-        console.error('No se pudo generar un enlace de red para el celular.', error);
-        showToast(error.message || 'No se pudo detectar la dirección de red del equipo.', 'error');
+        const report = [
+          'ConversorG - diagnóstico de conexión local',
+          `Fecha: ${new Date().toISOString()}`,
+          `Página abierta en el PC: ${location.origin}${location.pathname}`,
+          `Endpoint consultado: ${location.origin}/api/network-info`,
+          `Respuesta del servidor: ${responseStatus}`,
+          `Conexión de red del navegador: ${navigator.onLine ? 'disponible' : 'sin conexión'}`,
+          `Error técnico: ${error.name || 'Error'}: ${error.message || 'Error desconocido'}`,
+          'No se incluyó el contenido de ningún archivo.'
+        ].join('\n');
+        wifiErrorSummary.textContent = 'No se pudo obtener el enlace local. Comprueba que ConversorG esté ejecutándose, que hayas abierto la copia servida por Node.js (no un archivo HTML directo) y que Windows Firewall permita Node.js en redes privadas.';
+        wifiErrorDetails.textContent = report;
+        wifiErrorPanel.hidden = false;
+        console.error('No se pudo generar un enlace de red para el celular.', { report, error });
+        showToast('No se pudo generar el enlace local. Revisa el diagnóstico.', 'error');
       }
     };
 
     useOnline();
+    wifiErrorPanel.hidden = true;
     wifiModal.classList.add('active');
     if (window.lucide) lucide.createIcons();
   });
@@ -585,13 +712,24 @@ document.addEventListener('DOMContentLoaded', () => {
     wifiModal.classList.remove('active');
   });
 
-  btnCopyWifiUrl.addEventListener('click', () => {
+  btnCopyWifiUrl.addEventListener('click', async () => {
     const text = wifiUrlText.textContent;
     if (text) {
-      navigator.clipboard.writeText(text).then(() => {
+      try {
+        if (!navigator.clipboard || typeof navigator.clipboard.writeText !== 'function') {
+          throw new Error('El navegador no permite copiar desde una conexión HTTP local.');
+        }
+        await navigator.clipboard.writeText(text);
         showToast('Enlace copiado al portapapeles', 'info');
-      });
+      } catch (error) {
+        console.error('No se pudo copiar el enlace al portapapeles.', error);
+        showToast('No se pudo copiar el enlace. Selecciónalo y cópialo manualmente.', 'error');
+      }
     }
+  });
+
+  btnCopyWifiError.addEventListener('click', () => {
+    copyDiagnostic(wifiErrorDetails.textContent);
   });
 
   // ==================== HISTORIAL DE ACTIVIDAD (LOCALSTORAGE) ====================
@@ -624,7 +762,7 @@ document.addEventListener('DOMContentLoaded', () => {
     localStorage.setItem('conversorg_history', JSON.stringify(list));
 
     if (record.blobUrl) {
-      activeBlobUrls.set(id, { url: record.blobUrl, name: record.fileName, blob: record.blob });
+      activeBlobUrls.set(id, { url: record.blobUrl, name: record.fileName });
     }
   }
 
@@ -651,15 +789,10 @@ document.addEventListener('DOMContentLoaded', () => {
         <td>${formatBytes(item.resultSize || 0)}</td>
         <td style="text-align: right; white-space: nowrap;">
           ${activeObj ? `
-            <button class="btn btn-icon btn-hist-preview" data-id="${item.id}" title="Previsualizar" style="width: 32px; height: 32px;">
-              <i data-lucide="eye" style="width: 16px; height: 16px;"></i>
-            </button>
             <a href="${activeObj.url}" class="btn btn-icon" download="${item.fileName}" title="Descargar" style="width: 32px; height: 32px; display: inline-flex;">
               <i data-lucide="download" style="width: 16px; height: 16px;"></i>
             </a>
-          ` : `
-            <span style="font-size: 0.72rem; color: var(--text-muted);">Completado</span>
-          `}
+          ` : ''}
           <button class="btn btn-icon btn-hist-delete" data-id="${item.id}" title="Eliminar registro" style="width: 32px; height: 32px; color: #DC2626;">
             <i data-lucide="trash-2" style="width: 16px; height: 16px;"></i>
           </button>
@@ -670,20 +803,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (window.lucide) lucide.createIcons();
 
-    historyTableBody.querySelectorAll('.btn-hist-preview').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const id = btn.getAttribute('data-id');
-        const obj = activeBlobUrls.get(id);
-        if (obj) openFilePreview(obj.name, obj.url);
-      });
-    });
-
     historyTableBody.querySelectorAll('.btn-hist-delete').forEach(btn => {
       btn.addEventListener('click', () => {
         const id = btn.getAttribute('data-id');
         let current = getLocalHistory();
         current = current.filter(x => x.id !== id);
         localStorage.setItem('conversorg_history', JSON.stringify(current));
+        const activeResult = activeBlobUrls.get(id);
+        if (activeResult) URL.revokeObjectURL(activeResult.url);
         activeBlobUrls.delete(id);
         loadAndShowHistory();
       });
@@ -695,13 +822,14 @@ document.addEventListener('DOMContentLoaded', () => {
   btnClearHistory.addEventListener('click', () => {
     if (confirm('¿Deseas vaciar todo el historial de conversiones?')) {
       localStorage.removeItem('conversorg_history');
+      activeBlobUrls.forEach(result => URL.revokeObjectURL(result.url));
       activeBlobUrls.clear();
       loadAndShowHistory();
       showToast('Historial vaciado', 'info');
     }
   });
 
-  [actionModal, previewModal, wifiModal, historyModal].forEach(modal => {
+  [actionModal, wifiModal, historyModal].forEach(modal => {
     modal.addEventListener('click', e => {
       if (e.target === modal) modal.classList.remove('active');
     });

@@ -403,6 +403,17 @@
           </div>
         </div>
 
+        <section class="error-panel" id="conversionErrorPanel" role="alert" hidden>
+          <h4>No se pudo completar la conversión</h4>
+          <p id="conversionErrorSummary"></p>
+          <p id="conversionErrorAdvice"></p>
+          <details>
+            <summary>Detalles para soporte técnico</summary>
+            <pre id="conversionErrorDetails"></pre>
+          </details>
+          <button class="btn btn-surface" id="btnCopyConversionError" type="button">Copiar diagnóstico</button>
+        </section>
+
         <!-- Pantalla de Éxito -->
         <div class="success-screen" id="successScreen">
           <div class="success-badge">
@@ -415,14 +426,12 @@
             <div class="stat-pill" id="statOriginalSize">Original: --</div>
             <div class="stat-pill" id="statResultSize" style="color: #10B981; font-weight: 700;">Resultado: --</div>
           </div>
+          <p class="conversion-result-note" id="successResultNote" role="status" hidden></p>
 
           <div class="success-actions">
             <a href="#" id="btnDownloadResult" class="btn btn-primary" download>
               <i data-lucide="download"></i> Descargar Archivo
             </a>
-            <button id="btnPreviewResult" class="btn btn-surface">
-              <i data-lucide="eye"></i> Previsualizar
-            </button>
             <button id="btnConvertAnother" class="btn btn-surface">
               <i data-lucide="rotate-ccw"></i> Otro archivo
             </button>
@@ -439,32 +448,6 @@
     </div>
   </div>
 
-  <!-- ==================== MODAL DE PREVISUALIZACIÓN ==================== -->
-  <div class="modal-backdrop" id="previewModal">
-    <div class="modal-box preview-modal-box">
-      <div class="modal-header">
-        <h3 id="previewTitle">
-          <i data-lucide="eye"></i> <span>Visualizador de Archivo</span>
-        </h3>
-        <div style="display: flex; gap: 8px;">
-          <a href="#" id="previewDownloadDirect" class="btn btn-primary" style="padding: 6px 12px; font-size: 0.8rem;" download>
-            <i data-lucide="download"></i> Descargar
-          </a>
-          <button class="btn-icon" id="btnClosePreview">
-            <i data-lucide="x"></i>
-          </button>
-        </div>
-      </div>
-      <div class="modal-body" style="padding: 10px; height: calc(100% - 70px);">
-        <div class="preview-content-area" id="previewContentArea">
-          <iframe id="previewIframe" class="preview-iframe" src="" style="display: none;"></iframe>
-          <div id="previewTextBox" class="preview-text-box" style="display: none;"></div>
-          <img id="previewImg" class="preview-img" src="" alt="Previsualización" style="display: none;">
-        </div>
-      </div>
-    </div>
-  </div>
-
   <!-- ==================== MODAL WIFI / CELULAR ANDROID ==================== -->
   <div class="modal-backdrop" id="wifiModal">
     <div class="modal-box" style="max-width: 480px;">
@@ -476,9 +459,7 @@
       </div>
       <div class="modal-body">
         <div class="wifi-card">
-          <div class="qr-frame">
-            <img id="wifiQrCodeImg" src="" alt="Código QR de acceso a ConversorG">
-          </div>
+          <div class="qr-frame" role="img" aria-label="Código QR de acceso a ConversorG"></div>
           <div class="wifi-url-box">
             <span class="wifi-url-text" id="wifiUrlText">Cargando enlace...</span>
             <button class="btn btn-surface" id="btnCopyWifiUrl" style="padding: 6px 10px; font-size: 0.78rem;">
@@ -496,6 +477,15 @@
           <p id="wifiConnectionHelp" class="wifi-connection-help">
             La versión online procesa los archivos en el navegador del celular. Requiere internet y no necesita que el PC esté encendido.
           </p>
+          <section class="error-panel" id="wifiErrorPanel" role="alert" hidden>
+            <h4>No se pudo generar el enlace local</h4>
+            <p id="wifiErrorSummary"></p>
+            <details>
+              <summary>Detalles para soporte técnico</summary>
+              <pre id="wifiErrorDetails"></pre>
+            </details>
+            <button class="btn btn-surface" id="btnCopyWifiError" type="button">Copiar diagnóstico</button>
+          </section>
           <ol class="wifi-steps">
             <li>Escanea el código con la <strong>cámara de tu celular</strong> o un lector QR.</li>
             <li>En Android, toca los 3 puntos de Chrome y selecciona <strong>"Agregar a la pantalla principal"</strong> para instalarlo como App nativa.</li>

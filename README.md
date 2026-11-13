@@ -96,12 +96,15 @@ Diseñada pensando en el confort visual, la calidez y el lujo sobrio:
 10. **PDF a JPG (ZIP):** Exporta cada página de tu PDF como imagen individual de alta resolución empaquetadas en un archivo comprimido ZIP.
 
 ### 🛠️ Herramientas de Optimización y Edición
-11. **Comprimir PDF:** Optimiza la estructura interna y reduce los megabytes del archivo PDF para compartirlo por WhatsApp o correo.
+11. **Comprimir PDF:** Optimiza la estructura interna. El ahorro depende del contenido; la aplicación informa si el archivo no quedó más pequeño, algo habitual en PDFs que ya tienen imágenes comprimidas.
 12. **Rotar Páginas de PDF:** Gira páginas a 90°, 180° o 270° en caso de escaneos invertidos.
 13. **Marca de Agua Personalizada ("ConversorG"):** Aplica una marca de agua diagonal semi-transparente en todas las páginas para proteger los documentos.
 14. **Extraer Texto Plano:** Extrae todo el contenido de texto limpio a archivo `.txt` y permite copiarlo directo al portapapeles.
 15. **Historial de Actividad Persistente:** Registra cada conversión con fecha, hora, tamaño original, tamaño final, porcentaje de ahorro y acciones inmediatas.
-16. **Visualizador Integrado (File Previewer):** Abre y previsualiza archivos PDF, texto e imágenes directamente en la aplicación sin necesidad de programas externos.
+16. **Diagnóstico de errores:** Explica posibles causas en español y permite copiar datos técnicos de la página, la operación, los archivos y las librerías, sin incluir su contenido.
+
+Los archivos convertidos se descargan directamente. La previsualización integrada se retiró porque no interpretaba correctamente formatos de Office y podía mostrarlos como una pantalla negra.
+La compresión no rasteriza ni reduce la calidad de las imágenes; si un PDF ya está optimizado, puede conservar o aumentar ligeramente su tamaño.
 
 ---
 
